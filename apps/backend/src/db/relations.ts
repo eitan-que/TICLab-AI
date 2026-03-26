@@ -14,5 +14,19 @@ export const relations = defineRelations(schema, (r) => ({
 			to: r.user.id,
 		}),
 	},
-	verification: {},
+	category: {
+		
+	},
+	post: {
+
+	},
+	comment: {
+
+	},
+	vote: {
+
+	},
+	tag: {
+
+	}
 }));
