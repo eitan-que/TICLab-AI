@@ -1,0 +1,26 @@
+{
+  "name": "backend",
+  "version": "1.0.50",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile server src/index.ts",
+    "start": "./server"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.4.1",
+    "@elysiajs/openapi": "^1.4.14",
+    "better-auth": "^1.5.5",
+    "drizzle-orm": "^1.0.0-beta.18-7eb39f0",
+    "elysia": "latest",
+    "postgres": "^3.4.8",
+    "redis": "^5.11.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "drizzle-kit": "^1.0.0-beta.18-7eb39f0"
+  },
+  "module": "src/index.js"
+}
