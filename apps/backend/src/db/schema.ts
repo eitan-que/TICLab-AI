@@ -1,4 +1,10 @@
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, pgEnum } from "drizzle-orm/pg-core";
+
+export const roles = pgEnum("roles", [
+  "USER", // This is the default role for regular users
+  "MODERATOR", // This role can be assigned to users who need moderation capabilities, can be used for users who can manage content but don't have full admin privileges
+  "ADMIN", // This role can be assigned to users who need full administrative capabilities, can be used for users who can manage everything in the system
+])
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -6,6 +12,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  role: roles("role").default("USER").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -41,6 +48,8 @@ export const category = pgTable("category", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  createdBy: text("created_by")
+    .references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .$onUpdate(() => /* @__PURE__ */ new Date())
@@ -50,15 +59,15 @@ export const category = pgTable("category", {
 
 export const post = pgTable("post", {
   id: text("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
   title: text("title").notNull(),
   content: text("content").notNull(),
   published: boolean("published").default(false).notNull(),
   authorId: text("author_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => user.id, { onDelete: "set null" }),
   categoryId: text("category_id")
     .notNull()
-    .references(() => category.id, { onDelete: "cascade" }),
+    .references(() => category.id, { onDelete: "cascade"}),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .$onUpdate(() => /* @__PURE__ */ new Date())
@@ -70,8 +79,7 @@ export const comment = pgTable("comment", {
   id: text("id").primaryKey(),
   content: text("content").notNull(),
   authorId: text("author_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => user.id, { onDelete: "set null" }),
   postId: text("post_id")
     .notNull()
     .references(() => post.id, { onDelete: "cascade" }),
@@ -102,6 +110,8 @@ export const tag = pgTable("tag", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  createdBy: text("created_by")
+    .references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .$onUpdate(() => /* @__PURE__ */ new Date())
