@@ -1,9 +1,9 @@
 CREATE TYPE "roles" AS ENUM('USER', 'MODERATOR', 'ADMIN');--> statement-breakpoint
 CREATE TABLE "account" (
-	"id" text PRIMARY KEY,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"account_id" text NOT NULL,
 	"provider_id" text NOT NULL,
-	"user_id" text NOT NULL,
+	"user_id" uuid NOT NULL,
 	"access_token" text,
 	"refresh_token" text,
 	"id_token" text,
@@ -16,57 +16,57 @@ CREATE TABLE "account" (
 );
 --> statement-breakpoint
 CREATE TABLE "category" (
-	"id" text PRIMARY KEY,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"name" text NOT NULL,
 	"slug" text NOT NULL UNIQUE,
-	"created_by" text,
+	"created_by" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	"deleted_at" timestamp
 );
 --> statement-breakpoint
 CREATE TABLE "comment" (
-	"id" text PRIMARY KEY,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"content" text NOT NULL,
-	"author_id" text,
-	"post_id" text NOT NULL,
+	"author_id" uuid,
+	"post_id" uuid NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	"deleted_at" timestamp
 );
 --> statement-breakpoint
 CREATE TABLE "post" (
-	"id" text PRIMARY KEY,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"slug" text NOT NULL UNIQUE,
 	"title" text NOT NULL,
 	"content_url" text NOT NULL,
 	"published" boolean DEFAULT false NOT NULL,
-	"author_id" text,
-	"category_id" text NOT NULL,
+	"author_id" uuid,
+	"category_id" uuid NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	"deleted_at" timestamp
 );
 --> statement-breakpoint
 CREATE TABLE "post_tags" (
-	"post_id" text,
-	"tag_id" text,
+	"post_id" uuid,
+	"tag_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	CONSTRAINT "post_tags_pkey" PRIMARY KEY("post_id","tag_id")
 );
 --> statement-breakpoint
 CREATE TABLE "tag" (
-	"id" text PRIMARY KEY,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"name" text NOT NULL UNIQUE,
-	"created_by" text,
+	"created_by" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	"deleted_at" timestamp
 );
 --> statement-breakpoint
 CREATE TABLE "user" (
-	"id" text PRIMARY KEY,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"name" text NOT NULL,
 	"email" text NOT NULL UNIQUE,
 	"email_verified" boolean DEFAULT false NOT NULL,
@@ -77,11 +77,11 @@ CREATE TABLE "user" (
 );
 --> statement-breakpoint
 CREATE TABLE "vote" (
-	"id" text PRIMARY KEY,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"value" boolean NOT NULL,
-	"user_id" text NOT NULL,
-	"post_id" text,
-	"comment_id" text,
+	"user_id" uuid NOT NULL,
+	"post_id" uuid,
+	"comment_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp NOT NULL
 );

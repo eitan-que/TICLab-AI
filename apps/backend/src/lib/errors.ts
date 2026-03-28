@@ -1,3 +1,5 @@
+import { ZodError } from "zod";
+
 /**
  * Custom application error class that extends the built-in Error class.
  * Includes an error code, HTTP status code, and optional additional details.
@@ -106,4 +108,25 @@ export class ConflictError<T> extends AppError<T> {
     super(message, "CONFLICT", 409, details);
     this.name = "ConflictError";
   }
+}
+
+/**
+ * ParseZodError is a helper function that converts a ZodError into a ValidationError with a structured details object.
+ * It maps Zod's validation issues to a more standardized format that can be easily consumed by clients.
+ * Each issue is transformed into an object that indicates the path of the invalid field and the expected type, or lists any unrecognized keys.
+ * This allows clients to understand exactly what was wrong with the request data and how to fix it.
+ * @param error - The ZodError thrown during validation.
+ * @returns A ValidationError with a structured details object containing the validation issues.
+ */
+export function ParseZodError(error: ZodError): ValidationError<({ path: string; expected: unknown }|{ extraKeys: string[] })[]> {
+  const parsedError = error.issues.map(issue => {
+    if (issue.code === 'unrecognized_keys') {
+      return { extraKeys: issue.keys };
+    }
+    return {
+      path: issue.path.join(':'),
+      expected: issue.code === 'invalid_type' ? issue.expected : undefined,
+    };
+  });
+  return new ValidationError("Validation failed", parsedError);
 }

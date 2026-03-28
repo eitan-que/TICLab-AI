@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, index, pgEnum, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, pgEnum, uniqueIndex, primaryKey, uuid } from "drizzle-orm/pg-core";
 
 export const roles = pgEnum("roles", [
   "USER", // This is the default role for regular users
@@ -7,7 +7,7 @@ export const roles = pgEnum("roles", [
 ])
 
 export const user = pgTable("user", {
-  id: text("id").primaryKey(),
+  id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
@@ -27,10 +27,10 @@ export const user = pgTable("user", {
 );
 
 export const account = pgTable("account", {
-  id: text("id").primaryKey(),
+  id: uuid("id").defaultRandom().primaryKey(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
-  userId: text("user_id")
+  userId: uuid("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   accessToken: text("access_token"),
@@ -51,10 +51,10 @@ export const account = pgTable("account", {
 );
 
 export const category = pgTable("category", {
-  id: text("id").primaryKey(),
+  id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  createdBy: text("created_by")
+  createdBy: uuid("created_by")
     .references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
@@ -69,14 +69,14 @@ export const category = pgTable("category", {
 );
 
 export const post = pgTable("post", {
-  id: text("id").primaryKey(),
+  id: uuid("id").defaultRandom().primaryKey(),
   slug: text("slug").notNull().unique(),
   title: text("title").notNull(),
   contentUrl: text("content_url").notNull(),
   published: boolean("published").default(false).notNull(),
-  authorId: text("author_id")
+  authorId: uuid("author_id")
     .references(() => user.id, { onDelete: "set null" }),
-  categoryId: text("category_id")
+  categoryId: uuid("category_id")
     .notNull()
     .references(() => category.id, { onDelete: "cascade"}),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -94,11 +94,11 @@ export const post = pgTable("post", {
 );
 
 export const comment = pgTable("comment", {
-  id: text("id").primaryKey(),
+  id: uuid("id").defaultRandom().primaryKey(),
   content: text("content").notNull(),
-  authorId: text("author_id")
+  authorId: uuid("author_id")
     .references(() => user.id, { onDelete: "set null" }),
-  postId: text("post_id")
+  postId: uuid("post_id")
     .notNull()
     .references(() => post.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -114,14 +114,14 @@ export const comment = pgTable("comment", {
 );
 
 export const vote = pgTable("vote", {
-  id: text("id").primaryKey(),
+  id: uuid("id").defaultRandom().primaryKey(),
   value: boolean("value").notNull(),
-  userId: text("user_id")
+  userId: uuid("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  postId: text("post_id")
+  postId: uuid("post_id")
     .references(() => post.id, { onDelete: "cascade" }),
-  commentId: text("comment_id")
+  commentId: uuid("comment_id")
     .references(() => comment.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
@@ -136,9 +136,9 @@ export const vote = pgTable("vote", {
 );
 
 export const tag = pgTable("tag", {
-  id: text("id").primaryKey(),
+  id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull().unique(),
-  createdBy: text("created_by")
+  createdBy: uuid("created_by")
     .references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
@@ -152,10 +152,10 @@ export const tag = pgTable("tag", {
 );
 
 export const postTags = pgTable("post_tags", {
-  postId: text("post_id")
+  postId: uuid("post_id")
     .notNull()
     .references(() => post.id, { onDelete: "cascade" }),
-  tagId: text("tag_id")
+  tagId: uuid("tag_id")
     .notNull()
     .references(() => tag.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
