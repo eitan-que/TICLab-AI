@@ -27,6 +27,14 @@ export const categorySlug = z
 export type CategorySlug = z.infer<typeof categorySlug>;
 
 /**
+ * CategoryId: A UUID string that uniquely identifies a category.
+ * Used for both user input and server-side operations.
+ */
+export const categoryId = z.uuid({ error: "CATEGORY_ID_INVALID" });
+
+export type CategoryId = z.infer<typeof categoryId>;
+
+/**
  * CreateCategoryInput: The expected shape of the input when creating a new category.
  * - name: Required, validated by categoryName schema.
  * - slug: Required, validated by categorySlug schema.
@@ -47,12 +55,14 @@ export type CreateCategory = z.infer<typeof createCategorySchema>;
 
 /**
  * UpdateCategoryInput: The expected shape of the input when updating an existing category.
+ * - id: Required, must be a valid UUID.
  * - name: Optional, validated by categoryName schema if provided.
  * - slug: Optional, validated by categorySlug schema if provided.
  * Used for validating incoming data when updating a category.
  * Used only for server-side operations.
  */
 export const updateCategorySchema = z.object({
+    id: categoryId,
     name: categoryName.optional(),
     slug: categorySlug.optional(),
 }, {
@@ -60,6 +70,35 @@ export const updateCategorySchema = z.object({
 });
 
 export type UpdateCategory = z.infer<typeof updateCategorySchema>;
+
+/**
+ * GetAllCategoriesQuery: The expected shape of the query parameters when retrieving a list of categories.
+ * - page: Optional, must be a positive integer, defaults to 1.
+ * - limit: Optional, must be a positive integer between 1 and 100, defaults to 10.
+ * - name: Optional, validated by categoryName schema if provided. Cannot be used together with slug.
+ * - slug: Optional, validated by categorySlug schema if provided. Cannot be used together with name.
+ * Used for validating incoming query parameters when retrieving categories.
+ * Used only for server-side operations.
+ */
+export const getAllCategoriesSchema = z.object({
+    page: z.number({ error: "PAGE_INVALID" }).int({ error: "PAGE_NOT_INTEGER" }).positive({ error: "PAGE_NOT_POSITIVE" }).default(1),
+    limit: z.number({ error: "LIMIT_INVALID" }).int({ error: "LIMIT_NOT_INTEGER" }).positive({ error: "LIMIT_NOT_POSITIVE" }).max(100, { error: "LIMIT_TOO_HIGH" }).default(10),
+    name: categoryName.optional(),
+    slug: categorySlug.optional(),
+}, {
+    error: "GET_ALL_CATEGORIES_QUERY_INVALID"
+}).refine(
+    (data) => {
+        const hasName = data.name !== undefined;
+        const hasSlug = data.slug !== undefined;
+        return !(hasName && hasSlug);
+    },
+    {
+        error: "GET_ALL_CATEGORIES_QUERY_INVALID_FILTERS"
+    }
+);
+
+export type GetAllCategories = z.infer<typeof getAllCategoriesSchema>;
 
 /**
  * CreateCategoryInputSchema: A simplified schema for validating just the name when creating a category.
@@ -80,6 +119,7 @@ export type CreateCategoryInput = z.infer<typeof createCategoryInputSchema>;
  * Used only for user input.
  */
 export const updateCategoryInputSchema = z.object({
+    id: categoryId,
     name: categoryName.optional(),
 }, {
     error: "UPDATE_CATEGORY_NAME_INPUT_INVALID"
