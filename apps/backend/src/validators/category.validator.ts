@@ -35,6 +35,14 @@ export const categoryId = z.uuid({ error: "CATEGORY_ID_INVALID" });
 export type CategoryId = z.infer<typeof categoryId>;
 
 /**
+ * CreatorId: A UUID string that identifies the user who created the category.
+ * Used for both user input and server-side operations.
+ */
+export const creatorId = z.uuid({ error: "CATEGORY_CREATED_BY_INVALID" });
+
+export type CreatorId = z.infer<typeof creatorId>;
+
+/**
  * CreateCategoryInput: The expected shape of the input when creating a new category.
  * - name: Required, validated by categoryName schema.
  * - slug: Required, validated by categorySlug schema.
@@ -46,7 +54,7 @@ export type CategoryId = z.infer<typeof categoryId>;
 export const createCategorySchema = z.object({
     name: categoryName,
     slug: categorySlug,
-    createdBy: z.uuid({ error: "CATEGORY_CREATED_BY_INVALID" }).nullable(),
+    createdBy: creatorId.nullable(),
 }, {
     error: "CREATE_CATEGORY_INPUT_INVALID"
 });
@@ -107,6 +115,7 @@ export type GetAllCategories = z.infer<typeof getAllCategoriesSchema>;
  */
 export const createCategoryInputSchema = z.object({
     name: categoryName,
+    creatorId: creatorId.nullable()
 }, {
     error: "CREATE_CATEGORY_NAME_INPUT_INVALID"
 });

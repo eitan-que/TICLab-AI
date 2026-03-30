@@ -1,11 +1,22 @@
 import { db } from "@/db/drizzle";
 import { category } from "@/db/schema";
 import { Category } from "@/domain/category.domain";
-import { Debug, Debuggable } from "@/lib/debug";
-import { AppError, BadRequestError, ParseZodError } from "@/lib/errors";
+import { Debuggable } from "@/lib/debug";
+import { AppError, ParseZodError } from "@/lib/errors";
 import { categoryId, CategoryId, categorySlug, CategorySlug, CreateCategory, createCategorySchema, GetAllCategories, getAllCategoriesSchema, UpdateCategory, updateCategorySchema } from "@/validators/category.validator";
 import { eq, sql } from "drizzle-orm";
 import { ZodError } from "zod";
+
+export interface CategoryRepositoryTemplate {
+    createCategory(data: CreateCategory): Promise<Category>;
+    getCategoryById(id: CategoryId): Promise<Category | null>;
+    getCategoryBySlug(slug: CategorySlug): Promise<Category | null>;
+    getAllCategories(query: GetAllCategories): Promise<Category[]>;
+    updateCategory(data: UpdateCategory): Promise<Category>;
+    deleteCategory(id: CategoryId): Promise<void>;
+    restoreCategory(id: CategoryId): Promise<void>;
+    hardDeleteCategory(id: CategoryId): Promise<void>;
+}
 
 /**
  * # CategoryRepository
@@ -15,7 +26,7 @@ import { ZodError } from "zod";
  * The repository also integrates with the Debug class to provide detailed logging of each step in the process, which can be invaluable for troubleshooting and monitoring the application's behavior.
  * @see Category for the domain model that this repository manages.
  */
-class CategoryRepository extends Debuggable {
+export class CategoryRepository extends Debuggable implements CategoryRepositoryTemplate {
 
     /**
      * ## Create Category
@@ -492,5 +503,3 @@ class CategoryRepository extends Debuggable {
         }
     }
 }
-
-export const categoryRepository = new CategoryRepository();

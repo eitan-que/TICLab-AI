@@ -139,7 +139,7 @@ export class Category {
         try {
             const validatedName = categoryName.parse(name);
             this._name = validatedName;
-            this.slug = this.slugifyName(validatedName);
+            this.slug = Category.slugifyName(validatedName);
             this.updateTimestamps();
         } catch (err) {
             if (err instanceof ZodError) {
@@ -216,9 +216,11 @@ export class Category {
      * @throws {ValidationError} If the generated slug does not meet the validation criteria defined in the categorySlug schema.
      * @throws {AppError} If an unexpected error occurs during validation.
      */
-    private slugifyName(name: CategoryName): CategorySlug {
+    static slugifyName(name: CategoryName): CategorySlug {
         const loweredName = name.toLowerCase();
-        const slug = loweredName.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        const baseSlug = loweredName.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        const randomSuffix = Math.random().toString(36).slice(2, 6);
+        const slug = `${baseSlug}-${randomSuffix}`;
         return slug as CategorySlug;
     }
 
