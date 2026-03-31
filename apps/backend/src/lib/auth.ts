@@ -10,6 +10,18 @@ const redis = createClient({
 await redis.connect();
 
 export const auth = betterAuth({
+  emailAndPassword: {
+    enabled: true,
+  },
+  user: {
+    additionalFields: {
+      role: {
+        type: "string",
+        input: false,
+        defaultValue: "USER",
+      }
+    }
+  },
   baseURL: process.env.BETTER_AUTH_URL,
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -50,6 +62,7 @@ export const auth = betterAuth({
     }
   },
   trustedOrigins: [
+    "http://localhost:3000", // Front end development server
     "http://localhost:3001" // Front end development server
   ]
 });
@@ -59,7 +72,7 @@ let _schema: ReturnType<typeof auth.api.generateOpenAPISchema>
 const getSchema = async () => (_schema ??= auth.api.generateOpenAPISchema())
 
 export const OpenAPI = {
-    getPaths: (prefix = '/auth/api') =>
+    getPaths: (prefix = '/api/auth') =>
         getSchema().then(({ paths }) => {
             const reference: typeof paths = Object.create(null)
 
