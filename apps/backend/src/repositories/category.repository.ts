@@ -503,3 +503,5 @@ export class CategoryRepository extends Debuggable implements CategoryRepository
         }
     }
 }
+
+export const categoryRepository = new CategoryRepository();

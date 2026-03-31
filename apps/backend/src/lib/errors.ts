@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { ValidationError as ElysiaValidationError } from "elysia";
 
 /**
  * Custom application error class that extends the built-in Error class.
@@ -110,6 +111,32 @@ export class ConflictError<T> extends AppError<T> {
   }
 }
 
+type FormattedValidationError = (
+  {
+    extraKeys: string[];
+    code: "UNRECOGNIZED_KEYS";
+  }|
+  {
+    path: string;
+    expected: string;
+    code: string;
+  }|
+  {
+    path: string;
+    minimum: number;
+    code: string;
+  }|
+  {
+    path: string;
+    maximum: number;
+    code: string;
+  }|
+  {
+    path: string; 
+    code: string;
+  }
+);
+
 /**
  * ParseZodError is a helper function that converts a ZodError into a ValidationError with a structured details object.
  * It maps Zod's validation issues to a more standardized format that can be easily consumed by clients.
@@ -118,15 +145,55 @@ export class ConflictError<T> extends AppError<T> {
  * @param error - The ZodError thrown during validation.
  * @returns A ValidationError with a structured details object containing the validation issues.
  */
-export function ParseZodError(error: ZodError): ValidationError<({ path: string; expected: unknown }|{ extraKeys: string[] })[]> {
-  const parsedError = error.issues.map(issue => {
-    if (issue.code === 'unrecognized_keys') {
-      return { extraKeys: issue.keys };
+export function ParseZodError(error: ZodError): ValidationError<FormattedValidationError[]> {
+  const parsedError: FormattedValidationError[] = error.issues.map(issue => {
+    switch (issue.code) {
+      case 'unrecognized_keys':
+        return { 
+          extraKeys: issue.keys,
+          code: "UNRECOGNIZED_KEYS",
+        };
+      case 'invalid_type':
+        return {
+          path: issue.path.join(':'),
+          expected: issue.expected,
+          code: issue.message,
+        };
+      case 'too_small':
+        return {
+          path: issue.path.join(':'),
+          minimum: issue.minimum,
+          code: issue.message,
+        }
+      case 'too_big':
+        return {
+          path: issue.path.join(':'),
+          maximum: issue.maximum,
+          code: issue.message,
+        }
+      default:
+        return {
+          path: issue.path.join(':'),
+          code: issue.message,
+        };
     }
-    return {
-      path: issue.path.join(':'),
-      expected: issue.code === 'invalid_type' ? issue.expected : undefined,
-    };
   });
+  return new ValidationError("Validation failed", parsedError);
+}
+
+/**
+ * ParseElysiaValidationError is a helper function that converts an ElysiaValidationError into a ValidationError with a structured details object.
+ * It maps Elysia's validation issues to a more standardized format that can be easily consumed by clients.
+ * Each issue is transformed into an object that indicates the path of the invalid field and the error code.
+ * This allows clients to understand exactly what was wrong with the request data and how to fix it.
+ * @param error - The ElysiaValidationError thrown during validation.
+ * @returns A ValidationError with a structured details object containing the validation issues.
+ */
+export function ParseElysiaValidationError(error: ElysiaValidationError): ValidationError<FormattedValidationError[]> {
+  const parsedError: FormattedValidationError[] = error.all.map(issue => ({
+    path: issue.path,
+    code: issue.message,
+  }));
+
   return new ValidationError("Validation failed", parsedError);
 }

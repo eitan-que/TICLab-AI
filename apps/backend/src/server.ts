@@ -1,9 +1,9 @@
-import { Elysia } from "elysia";
+import { Elysia, ValidationError as ElysiaValidationError } from "elysia";
 import { auth, OpenAPI } from "@/lib/auth";
 import { cors } from "@elysiajs/cors";
 import { openapi } from '@elysiajs/openapi';
 import { apiRoutes } from "@/controllers";
-import { AppError, UnauthorizedError } from "@/lib/errors";
+import { AppError, ParseElysiaValidationError, UnauthorizedError } from "@/lib/errors";
 
 // user middleware (compute user and session and pass to routes)
 const betterAuth = new Elysia({ name: "better-auth" })
@@ -42,10 +42,16 @@ const app = new Elysia()
       allowedHeaders: ["Content-Type", "Authorization"],
     }),
   )
-  .use(betterAuth)
-  .use(apiRoutes)
   .onError(({ code, error, set }) => {
-    // Custom application errors (AppError and subclasses)
+    if (error instanceof ElysiaValidationError) {
+      const parsedError = ParseElysiaValidationError(error);
+      set.status = 400;
+      return {
+        error: parsedError.message,
+        code: parsedError.code,
+        details: parsedError.details,
+      };
+    }
     if (error instanceof AppError) {
       set.status = error.statusCode;
       return {
@@ -59,6 +65,8 @@ const app = new Elysia()
     set.status = 500;
     return { error: "Internal server error", code: "INTERNAL_ERROR" };
   })
+  .use(betterAuth)
+  .use(apiRoutes)
   .listen(3000);
 
 export type App = typeof app;

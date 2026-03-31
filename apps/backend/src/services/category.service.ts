@@ -1,7 +1,7 @@
 import { Category } from "@/domain/category.domain";
 import { Debuggable } from "@/lib/debug";
-import { AppError, NotFoundError, ParseZodError } from "@/lib/errors";
-import { CategoryRepositoryTemplate } from "@/repositories/category.repository";
+import { AppError, ConflictError, NotFoundError, ParseZodError } from "@/lib/errors";
+import { categoryRepository, CategoryRepositoryTemplate } from "@/repositories/category.repository";
 import { categoryId, CategoryId, CategoryName, categorySlug, CategorySlug, CreateCategoryInput, createCategoryInputSchema, GetAllCategories, getAllCategoriesSchema, UpdateCategoryInput, updateCategoryInputSchema } from "@/validators/category.validator";
 import { ZodError } from "zod";
 
@@ -225,6 +225,19 @@ export class CategoryService extends Debuggable {
         }
     }
 
+    /**
+     * ## Update Category
+     * This method updates an existing category based on the provided input data.
+     * It performs validation on the input data using the updateCategoryInputSchema, and if the validation fails, it throws a ValidationError with details about the specific validation issues.
+     * If the validation succeeds, it checks if the category exists by calling the getById method. If the category does not exist, it throws a NotFoundError.
+     * If the category exists, it calls the repository's updateCategory method to persist the updated category in the database.
+     * If an unexpected error occurs during validation or update, it throws an AppError with details about the error.
+     * @param data - The input data for updating an existing category, which should conform to the UpdateCategoryInput type.
+     * @returns A promise that resolves to the updated Category object.
+     * @throws {ValidationError} If the input data does not meet the validation criteria defined in the updateCategoryInputSchema.
+     * @throws {NotFoundError} If the category to be updated does not exist.
+     * @throws {AppError} If an unexpected error occurs during validation or category update.
+     */
     async update(data: UpdateCategoryInput): Promise<Category> {
         try {
             this.debug.start("Updating category", { ...data });
@@ -255,4 +268,159 @@ export class CategoryService extends Debuggable {
             throw new AppError("Unexpected error during category update", "CATEGORY_UPDATE_ERROR", 500, { error: err });
         }
     }
+
+    /**
+     * ## Delete Category
+     * This method marks a category as deleted based on its unique identifier (ID).
+     * It validates the provided ID using the categoryId schema, and if the validation fails, it throws a ValidationError with details about the specific validation issues.
+     * If the validation succeeds, it checks if the category exists by calling the getById method. If the category does not exist, it throws a NotFoundError.
+     * If the category exists, it calls the repository's deleteCategory method to mark the category as deleted in the database.
+     * If an unexpected error occurs during validation or deletion, it throws an AppError with details about the error.
+     * @param id - The unique identifier of the category to delete, which should conform to the CategoryId type.
+     * @returns A promise that resolves when the category has been marked as deleted.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria defined in the categoryId schema.
+     * @throws {NotFoundError} If the category to be deleted does not exist.
+     * @throws {AppError} If an unexpected error occurs during validation or category deletion.
+     */
+    async delete(id: CategoryId): Promise<void> {
+        try {
+            this.debug.start("Deleting category", { id });
+
+            this.debug.step("Validating category ID", { id });
+            const validatedId = categoryId.parse(id);
+            this.debug.info("Category ID validated successfully", { validatedId });
+
+            this.debug.step("Checking if category exists", { id: validatedId });
+            const existingCategory = await this.getById(validatedId);
+            this.debug.info("Existing category check completed", { existingCategory: !!existingCategory });
+
+            this.debug.step("Checking if category is already deleted", { id: validatedId, deletedAt: existingCategory.deletedAt });
+            if (existingCategory.deletedAt) {
+                this.debug.warn("Category is already marked as deleted", { id: validatedId });
+                throw new ConflictError("Category is already deleted", { id: validatedId });
+            }
+            this.debug.info("Category is not deleted, proceeding with deletion", { id: validatedId });
+
+            this.debug.step("Deleting category in the repository", { id: validatedId });
+            await this.repository.deleteCategory(validatedId);
+            this.debug.info("Category deleted successfully", { id: validatedId });
+
+            this.debug.finish("Category deletion completed successfully", { id: validatedId });
+
+        } catch (err) {
+            this.debug.error("Error occurred during category deletion", { error: err, id });
+            if (err instanceof ZodError) {
+                throw ParseZodError(err);
+            }
+            if (err instanceof AppError) {
+                throw err;
+            }
+            throw new AppError("Unexpected error during category deletion", "CATEGORY_DELETION_ERROR", 500, { error: err });
+        }
+    }
+
+    /**
+     * ## Restore Category
+     * This method restores a previously deleted category based on its unique identifier (ID).
+     * It validates the provided ID using the categoryId schema, and if the validation fails, it throws a ValidationError with details about the specific validation issues.
+     * If the validation succeeds, it checks if the category exists by calling the getById method. If the category does not exist, it throws a NotFoundError.
+     * If the category exists but is not marked as deleted, it throws a ConflictError indicating that the category cannot be restored because it is not deleted.
+     * If the category exists and is marked as deleted, it calls the repository's restoreCategory method to restore the category in the database.
+     * If an unexpected error occurs during validation or restoration, it throws an AppError with details about the error.
+     * @param id - The unique identifier of the category to restore, which should conform to the CategoryId type.
+     * @returns A promise that resolves when the category has been restored.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria defined in the categoryId schema.
+     * @throws {NotFoundError} If the category to be restored does not exist.
+     * @throws {ConflictError} If the category is not marked as deleted and therefore cannot be restored.
+     * @throws {AppError} If an unexpected error occurs during validation or category restoration.
+     */
+    async restore(id: CategoryId): Promise<void> {
+        try {
+            this.debug.start("Restoring category", { id });
+
+            this.debug.step("Validating category ID", { id });
+            const validatedId = categoryId.parse(id);
+            this.debug.info("Category ID validated successfully", { validatedId });
+
+            this.debug.step("Checking if category exists", { id: validatedId });
+            const existingCategory = await this.getById(validatedId);
+            this.debug.info("Existing category check completed", { existingCategory: !!existingCategory });
+
+            this.debug.step("Checking if category is not deleted", { id: validatedId, deletedAt: existingCategory.deletedAt });
+            if (!existingCategory.deletedAt) {
+                this.debug.warn("Category is not marked as deleted, cannot restore", { id: validatedId });
+                throw new ConflictError("Category is not deleted", { id: validatedId });
+            }
+            this.debug.info("Category is marked as deleted, proceeding with restoration", { id: validatedId });
+
+            this.debug.step("Restoring category in the repository", { id: validatedId });
+            await this.repository.restoreCategory(validatedId);
+            this.debug.info("Category restored successfully", { id: validatedId });
+
+            this.debug.finish("Category restoration completed successfully", { id: validatedId });
+        } catch (err) {
+            this.debug.error("Error occurred during category restoration", { error: err, id });
+            if (err instanceof ZodError) {
+                throw ParseZodError(err);
+            }
+            if (err instanceof AppError) {
+                throw err;
+            }
+            throw new AppError("Unexpected error during category restoration", "CATEGORY_RESTORE_ERROR", 500, { error: err });
+        }
+    }
+
+    /**
+     * ## Hard Delete Category
+     * This method permanently deletes a category from the database based on its unique identifier (ID).
+     * It validates the provided ID using the categoryId schema, and if the validation fails, it throws a ValidationError with details about the specific validation issues.
+     * If the validation succeeds, it checks if the category exists by calling the getById method. If the category does not exist, it throws a NotFoundError.
+     * If the category exists but is not marked as deleted, it throws a ConflictError indicating that the category cannot be hard deleted because it is not marked as deleted.
+     * If the category exists and is marked as deleted, it calls the repository's hardDeleteCategory method to permanently delete the category from the database.
+     * If an unexpected error occurs during validation or hard deletion, it throws an AppError with details about the error.
+     * @param id - The unique identifier of the category to hard delete, which should conform to the CategoryId type.
+     * @returns A promise that resolves when the category has been permanently deleted.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria defined in the categoryId schema.
+     * @throws {NotFoundError} If the category to be hard deleted does not exist.
+     * @throws {ConflictError} If the category is not marked as deleted and therefore cannot be hard deleted.
+     * @throws {AppError} If an unexpected error occurs during validation or category hard deletion.
+     */
+    async hardDelete(id: CategoryId): Promise<void> {
+        try {
+            this.debug.start("Hard deleting category", { id });
+
+            this.debug.step("Validating category ID", { id });
+            const validatedId = categoryId.parse(id);
+            this.debug.info("Category ID validated successfully", { validatedId });
+
+            this.debug.step("Checking if category exists", { id: validatedId });
+            const existingCategory = await this.getById(validatedId);
+            this.debug.info("Existing category check completed", { existingCategory: !!existingCategory });
+
+            this.debug.step("Checking if category is not deleted", { id: validatedId, deletedAt: existingCategory.deletedAt });
+            if (!existingCategory.deletedAt) {
+                this.debug.warn("Category is not marked as deleted, cannot hard delete", { id: validatedId });
+                throw new ConflictError("Category is not deleted", { id: validatedId });
+            }
+            this.debug.info("Category is marked as deleted, proceeding with hard deletion", { id: validatedId });
+
+            this.debug.step("Hard deleting category in the repository", { id: validatedId });
+            await this.repository.hardDeleteCategory(validatedId);
+            this.debug.info("Category hard deleted successfully", { id: validatedId });
+
+            this.debug.finish("Category hard deletion completed successfully", { id: validatedId });
+        } catch (err) {
+            this.debug.error("Error occurred during category hard deletion", { error: err, id });
+            if (err instanceof ZodError) {
+                throw ParseZodError(err);
+            }
+            if (err instanceof AppError) {
+                throw err;
+            }
+            throw new AppError("Unexpected error during category hard deletion", "CATEGORY_HARD_DELETE_ERROR", 500, { error: err });
+
+        }
+    }
 }
+
+export const categoryService = new CategoryService(categoryRepository);
