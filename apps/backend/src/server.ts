@@ -32,6 +32,15 @@ const app = new Elysia()
     documentation: {
       components: await OpenAPI.components,
       paths: await OpenAPI.getPaths(),
+      info: {
+        title: "TICLab API",
+        version: "1.0.0",
+        description: "API documentation for TICLab backend server",
+        contact: {
+          name: "TICLab Team",
+          email: "eitan@restoman.app"
+        }
+      }
     }
   }))
   .use(
