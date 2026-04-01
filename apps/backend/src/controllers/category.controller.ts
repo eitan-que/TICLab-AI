@@ -3,17 +3,11 @@ import { CreateCategoryInput, createCategoryInputSchema } from "@/validators/cat
 import Elysia from "elysia";
 
 export const categoryController = new Elysia({ name: "category", prefix: "/category" })
-    .get("/ok", () => {
-        return {
-            ok: true,
-        };
-    })
     .post("/", async ({ 
         body,
         // @ts-ignore
         user
     }) => {
-        console.log(user);
         const result = await categoryService.create({
             name: body.name,
             creatorId: user.id
@@ -22,4 +16,9 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
     }, {
         body: createCategoryInputSchema.omit({ creatorId: true}),
         auth: true,
+        detail: {
+            summary: "Create Category",
+            description: "Create a new category. The authenticated user will be set as the creator of the category.",
+            tags: ["Category"],
+        },
     })
