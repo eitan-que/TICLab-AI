@@ -164,6 +164,13 @@ export class CategoryService extends Debuggable {
             }
             this.debug.info("Category found", { ...category });
 
+            this.debug.step("Checking if category is marked as deleted", { slug: validatedSlug, deletedAt: category.deletedAt });
+            if (category.deletedAt) {
+                this.debug.warn("Category is marked as deleted, treating as not found", { slug: validatedSlug });
+                throw new NotFoundError("Category not found", { slug: validatedSlug });
+            }
+            this.debug.info("Category is not deleted, proceeding with retrieval", { slug: validatedSlug });
+
             this.debug.finish("Category retrieval by slug completed successfully", { ...category });
             return category;
 
@@ -277,12 +284,12 @@ export class CategoryService extends Debuggable {
      * If the category exists, it calls the repository's deleteCategory method to mark the category as deleted in the database.
      * If an unexpected error occurs during validation or deletion, it throws an AppError with details about the error.
      * @param id - The unique identifier of the category to delete, which should conform to the CategoryId type.
-     * @returns A promise that resolves when the category has been marked as deleted.
+     * @returns A promise that resolves to the deleted Category object.
      * @throws {ValidationError} If the provided ID does not meet the validation criteria defined in the categoryId schema.
      * @throws {NotFoundError} If the category to be deleted does not exist.
      * @throws {AppError} If an unexpected error occurs during validation or category deletion.
      */
-    async delete(id: CategoryId): Promise<void> {
+    async delete(id: CategoryId): Promise<Category> {
         try {
             this.debug.start("Deleting category", { id });
 
@@ -305,8 +312,13 @@ export class CategoryService extends Debuggable {
             await this.repository.deleteCategory(validatedId);
             this.debug.info("Category deleted successfully", { id: validatedId });
 
-            this.debug.finish("Category deletion completed successfully", { id: validatedId });
+            this.debug.step("Marking category as deleted in the domain model", { id: validatedId });
+            existingCategory.delete();
+            this.debug.info("Category marked as deleted in the domain model", { existingCategory });
 
+            this.debug.finish("Category deletion completed successfully", { existingCategory });
+            return existingCategory;
+            
         } catch (err) {
             this.debug.error("Error occurred during category deletion", { error: err, id });
             if (err instanceof ZodError) {
@@ -328,13 +340,13 @@ export class CategoryService extends Debuggable {
      * If the category exists and is marked as deleted, it calls the repository's restoreCategory method to restore the category in the database.
      * If an unexpected error occurs during validation or restoration, it throws an AppError with details about the error.
      * @param id - The unique identifier of the category to restore, which should conform to the CategoryId type.
-     * @returns A promise that resolves when the category has been restored.
+     * @returns A promise that resolves to the restored Category object.
      * @throws {ValidationError} If the provided ID does not meet the validation criteria defined in the categoryId schema.
      * @throws {NotFoundError} If the category to be restored does not exist.
      * @throws {ConflictError} If the category is not marked as deleted and therefore cannot be restored.
      * @throws {AppError} If an unexpected error occurs during validation or category restoration.
      */
-    async restore(id: CategoryId): Promise<void> {
+    async restore(id: CategoryId): Promise<Category> {
         try {
             this.debug.start("Restoring category", { id });
 
@@ -357,7 +369,13 @@ export class CategoryService extends Debuggable {
             await this.repository.restoreCategory(validatedId);
             this.debug.info("Category restored successfully", { id: validatedId });
 
+            this.debug.step("Marking category as restored in the domain model", { id: validatedId });
+            existingCategory.restore();
+            this.debug.info("Category marked as restored in the domain model", { existingCategory });
+
             this.debug.finish("Category restoration completed successfully", { id: validatedId });
+            return existingCategory;
+
         } catch (err) {
             this.debug.error("Error occurred during category restoration", { error: err, id });
             if (err instanceof ZodError) {

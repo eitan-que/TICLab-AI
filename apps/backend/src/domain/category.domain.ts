@@ -2,6 +2,16 @@ import { AppError, ParseZodError } from "@/lib/errors";
 import { categoryName, CategoryName, categorySlug, CategorySlug } from "@/validators/category.validator";
 import { ZodError } from "zod";
 
+type CategoryJSONFields = {
+    id?: boolean;
+    name?: boolean;
+    slug?: boolean;
+    createdBy?: boolean;
+    createdAt?: boolean;
+    updatedAt?: boolean;
+    deletedAt?: boolean;
+};
+
 /**
  * Category represents a category entity in the system.
  * It encapsulates all properties and behaviors related to a category, including validation logic.
@@ -252,5 +262,59 @@ export class Category {
     public delete() {
         this.deletedAt = new Date();
         this.updateTimestamps();
+    }
+
+    /**
+     * ## Restore
+     * ### Public Method
+     * This method restores a previously deleted category by setting the deletedAt timestamp back to null.
+     * It also updates the updatedAt timestamp to reflect the modification.
+     * After calling this method, the category is considered active again and should be returned in active category queries.
+     * @example
+     * ```ts
+     * category.restore();
+     * ```
+     */
+    public restore() {
+        this.deletedAt = null;
+        this.updateTimestamps();
+    }
+
+    /**
+     * ## toJSON
+     * ### Public Method
+     * This method converts the Category instance into a JSON object. 
+     * It accepts an optional parameter `fields` which allows you to specify which properties to include in the output.
+     * If `fields` is not provided, all properties will be included in the output.
+     * This method is useful for controlling the serialization of the Category instance, especially when sending data to clients or APIs.
+     * @example
+     * ```ts
+     * const json = category.toJSON({ id: true, name: true });
+     * // json would be { id: "123", name: "Example Category" }
+     * ```
+     */
+    public toJSON(fields?: CategoryJSONFields) {
+        const payload = {
+            id: this.id,
+            name: this.name,
+            slug: this.slug,
+            createdBy: this.createdBy,
+            createdAt: this.createdAt.toISOString(),
+            updatedAt: this.updatedAt.toISOString(),
+            deletedAt: this.deletedAt ? this.deletedAt.toISOString() : null,
+        };
+
+        if (!fields) {
+            return payload;
+        }
+
+        const selected: Partial<typeof payload> = {};
+        for (const key of Object.keys(payload) as Array<keyof typeof payload>) {
+            if (fields[key]) {
+                (selected as Record<string, unknown>)[key] = payload[key];
+            }
+        }
+
+        return selected;
     }
 }
