@@ -213,7 +213,7 @@ export class Category {
     // Methods
 
     /**
-     * ### Private Method
+     * ### Static Method
      * This method generates a slug from the given category name by converting it to lowercase, replacing non-alphanumeric characters with hyphens, and trimming leading/trailing hyphens.
      * The generated slug is then validated against the categorySlug schema to ensure it meets the required format.
      * If the validation fails, a ValidationError is thrown with details about the specific validation issues.
@@ -221,7 +221,7 @@ export class Category {
      * @example
      * ```ts
      * const slug = this.slugifyName("Example Category Name");
-     * // slug would be "example-category-name"
+     * // slug would be "example-category-name-1a2b" (the random suffix will vary)
      * ```
      * @throws {ValidationError} If the generated slug does not meet the validation criteria defined in the categorySlug schema.
      * @throws {AppError} If an unexpected error occurs during validation.

@@ -72,7 +72,7 @@ export const post = pgTable("post", {
   id: uuid("id").defaultRandom().primaryKey(),
   slug: text("slug").notNull().unique(),
   title: text("title").notNull(),
-  contentUrl: text("content_url").notNull(),
+  content: text("content").notNull(),
   published: boolean("published").default(false).notNull(),
   authorId: uuid("author_id")
     .references(() => user.id, { onDelete: "set null" }),

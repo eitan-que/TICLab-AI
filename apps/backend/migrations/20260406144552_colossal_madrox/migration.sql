@@ -1,0 +1,1 @@
+ALTER TABLE "post" RENAME COLUMN "content_url" TO "content";
