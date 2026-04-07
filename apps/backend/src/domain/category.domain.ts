@@ -235,13 +235,12 @@ export class Category {
     }
 
     /**
-     * ## Public Method
-     * This method marks the category as deleted by setting the deletedAt timestamp to the current date and time.
-     * It also updates the updatedAt timestamp to reflect the modification.
-     * After calling this method, the category is considered deleted and should not be returned in active category queries.
+     * ## Private Method
+     * This method updates the updatedAt timestamp to the current date and time.
+     * It should be called whenever the category is modified to ensure that the updatedAt timestamp reflects the last modification time.
      * @example
      * ```ts
-     * category.delete();
+     * this.updateTimestamps();
      * ```
      */
     private updateTimestamps() {

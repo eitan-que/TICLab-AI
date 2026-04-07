@@ -184,7 +184,7 @@ export const updatePostSchema = z.object({
 export type UpdatePost = z.infer<typeof updatePostSchema>;
 
 /**
- * GetPostsInput: The expected shape of the input when retrieving a list of posts.
+ * GetAllPostsInput: The expected shape of the input when retrieving a list of posts.
  * - page: Optional, must be a positive integer, defaults to 1.
  * - limit: Optional, must be a positive integer between 1 and 100, defaults to 10.
  * - search: Optional, a string used for searching posts by title or content, max length 255.
@@ -194,10 +194,9 @@ export type UpdatePost = z.infer<typeof updatePostSchema>;
  * Used for validating incoming data when retrieving posts with pagination and filters.
  * Used only for server-side operations.
  */
-export const getPostsSchema = z.object({
+export const getAllPostsSchema = z.object({
     page: z.number({ error: "GET_POSTS_PAGE_INVALID" }).int().positive().default(1),
     limit: z.number({ error: "GET_POSTS_LIMIT_INVALID" }).int().positive().max(100).default(10),
-    search: z.string({ error: "GET_POSTS_SEARCH_INVALID" }).max(255).trim().optional(),
     title: postTitle.optional(),
     categoryId: categoryId.optional(),
     authorId: authorId.optional(),
@@ -205,7 +204,7 @@ export const getPostsSchema = z.object({
     error: "GET_POSTS_INPUT_INVALID"
 });
 
-export type GetPosts = z.infer<typeof getPostsSchema>;
+export type GetAllPosts = z.infer<typeof getAllPostsSchema>;
 
 /**
  * DeletePostInput: The expected shape of the input when deleting a post.
