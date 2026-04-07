@@ -10,13 +10,16 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
         // @ts-ignore
         user
     }) => {
-        if (user.role !== "ADMIN") {
+        const isAdmin = user.role === "ADMIN";
+        if (!isAdmin) {
             throw new ForbiddenError("Cannot create category", { userId: user.id, userRole: user.role });
         }
+
         const result = await categoryService.create({
             name: body.name,
             creatorId: user.id
         });
+        
         return result.toJSON();
     }, {
         body: createCategoryInputSchema.omit({ creatorId: true}),
@@ -32,15 +35,19 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
         // @ts-ignore
         user
     }) => {
-        if (user.role !== "ADMIN" && user.role !== "MODERATOR") {
-            throw new ForbiddenError("Cannot get category by id", { userId: user.id, userRole: user.role });
+        const isAdminOrModerator = user.role === "ADMIN" || user.role === "MODERATOR";
+        if (!isAdminOrModerator) {
+            throw new ForbiddenError("Cannot access category", { userId: user.id, userRole: user.role });
         }
+
         const result = await categoryService.getById(params.id);
+
         return result.toJSON();
     }, {
         params: z.object({
             id: categoryId,
         }),
+        auth: true,
         detail: {
             summary: "Get Category by ID",
             description: "Retrieve a category by its unique identifier. Only users with the ADMIN or MODERATOR role can access this endpoint.",
@@ -51,6 +58,7 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
         params
     }) => {
         const result = await categoryService.getBySlug(params.slug);
+
         return result.toJSON();
     }, {
         params: z.object({
@@ -66,6 +74,7 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
         query
     }) => {
         const result = await categoryService.getAll(query);
+
         return result.map(category => category.toJSON());
     }, {
         query: getAllCategoriesSchema,
@@ -80,10 +89,13 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
         // @ts-ignore
         user 
     }) => {
-        if (user.role !== "ADMIN") {
+        const isAdmin = user.role === "ADMIN";
+        if (!isAdmin) {
             throw new ForbiddenError("Cannot update category", { userId: user.id, userRole: user.role });
         }
+
         const result = await categoryService.update(body);
+        
         return result.toJSON();
     }, {
         body: updateCategoryInputSchema,
@@ -99,10 +111,13 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
         // @ts-ignore
         user
     }) => {
-        if (user.role !== "ADMIN") {
+        const isAdmin = user.role === "ADMIN";
+        if (!isAdmin) {
             throw new ForbiddenError("Cannot delete category", { userId: user.id, userRole: user.role });
         }
+
         const result = await categoryService.delete(params.id);
+
         return result.toJSON();
     }, {
         params: z.object({
@@ -120,10 +135,13 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
         // @ts-ignore
         user
     }) => {
-        if (user.role !== "ADMIN") {
+        const isAdmin = user.role === "ADMIN";
+        if (!isAdmin) {
             throw new ForbiddenError("Cannot restore category", { userId: user.id, userRole: user.role });
         }
+
         const result = await categoryService.restore(params.id);
+
         return result.toJSON();
     }, {
         params: z.object({
@@ -141,10 +159,13 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
         // @ts-ignore
         user
     }) => {
-        if (user.role !== "ADMIN") {
+        const isAdmin = user.role === "ADMIN";
+        if (!isAdmin) {
             throw new ForbiddenError("Cannot restore category", { userId: user.id, userRole: user.role });
         }
+
         const result = await categoryService.restore(params.id);
+
         return result.toJSON();
     }, {
         params: z.object({
@@ -162,10 +183,13 @@ export const categoryController = new Elysia({ name: "category", prefix: "/categ
         // @ts-ignore
         user
     }) => {
-        if (user.role !== "ADMIN") {
+        const isAdmin = user.role === "ADMIN";
+        if (!isAdmin) {
             throw new ForbiddenError("Cannot hard delete category", { userId: user.id, userRole: user.role });
         }
+
         await categoryService.hardDelete(params.id);
+
         return { message: "Category permanently deleted" };
     }, {
         params: z.object({

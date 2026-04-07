@@ -2,7 +2,7 @@ import { Category } from "@/domain/category.domain";
 import { Debuggable } from "@/lib/debug";
 import { AppError, ConflictError, NotFoundError, ParseZodError } from "@/lib/errors";
 import { categoryRepository, CategoryRepositoryTemplate } from "@/repositories/category.repository";
-import { categoryId, CategoryId, CategoryName, categorySlug, CategorySlug, CreateCategoryInput, createCategoryInputSchema, GetAllCategories, getAllCategoriesSchema, UpdateCategoryInput, updateCategoryInputSchema } from "@/validators/category.validator";
+import { categoryId, CategoryId, categorySlug, CategorySlug, CreateCategoryInput, createCategoryInputSchema, GetAllCategories, getAllCategoriesSchema, UpdateCategoryInput, updateCategoryInputSchema } from "@/validators/category.validator";
 import { ZodError } from "zod";
 
 export class CategoryService extends Debuggable {

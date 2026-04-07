@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { categoryController } from "@/controllers/category.controller";
+import { postController } from "@/controllers/post.controller";
 
 /**
  * Aggregated API routes with shared error handling.
@@ -7,4 +8,5 @@ import { categoryController } from "@/controllers/category.controller";
 export const apiRoutes = new Elysia({ prefix: "/v1" })
   // Mount all routes
   .use(categoryController)
+  .use(postController)
 
