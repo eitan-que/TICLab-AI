@@ -1,6 +1,6 @@
 import { Post } from "@/domain/post.domain";
 import { Debuggable } from "@/lib/debug";
-import { AppError, ConflictError, NotFoundError, ParseZodError } from "@/lib/errors";
+import { AppError, ConflictError, ForbiddenError, NotFoundError, ParseZodError } from "@/lib/errors";
 import { postRepository, PostRepositoryTemplate } from "@/repositories/post.repository";
 import { createPostInputSchema, CreatePostInput, getAllPostsSchema, GetAllPosts, postId, PostId, postSlug, PostSlug, updatePostInputSchema, UpdatePostInput } from "@/validators/post.validator";
 import { ZodError } from "zod";
@@ -341,9 +341,9 @@ export class PostService extends Debuggable {
 	 * @throws {NotFoundError} If the post to be deleted does not exist.
 	 * @throws {AppError} If an unexpected error occurs during validation or post deletion.
 	 */
-	async delete(id: PostId): Promise<Post> {
+	async delete(id: PostId, deletedById: string): Promise<Post> {
 		try {
-			this.debug.start("Deleting post", { id });
+			this.debug.start("Deleting post", { id, deletedById });
 
 			this.debug.step("Validating post ID", { id });
 			const validatedId = postId.parse(id);
@@ -360,12 +360,12 @@ export class PostService extends Debuggable {
 			}
 			this.debug.info("Post is not deleted, proceeding with deletion", { id: validatedId });
 
-			this.debug.step("Deleting post in the repository", { id: validatedId });
-			await this.repository.deletePost(validatedId);
+			this.debug.step("Deleting post in the repository", { id: validatedId, deletedById });
+			await this.repository.deletePost({ id: validatedId, deletedBy: deletedById });
 			this.debug.info("Post deleted successfully", { id: validatedId });
 
 			this.debug.step("Marking post as deleted in the domain model", { id: validatedId });
-			existingPost.delete();
+			existingPost.delete(deletedById);
 			this.debug.info("Post marked as deleted in the domain model", { existingPost });
 
 			this.debug.finish("Post deletion completed successfully", { existingPost });
@@ -398,9 +398,16 @@ export class PostService extends Debuggable {
 	 * @throws {ConflictError} If the post is not marked as deleted and therefore cannot be restored.
 	 * @throws {AppError} If an unexpected error occurs during validation or post restoration.
 	 */
-	async restore(id: PostId): Promise<Post> {
+	/**
+	 * Restores a soft-deleted post.
+	 * @param id - The post ID to restore.
+	 * @param requesterId - The ID of the user attempting the restore.
+	 * @param requesterRole - The role of the user attempting the restore.
+	 * @throws {ForbiddenError} If the post was deleted by an admin/mod and the requester is the author.
+	 */
+	async restore(id: PostId, requesterId: string, requesterRole: string): Promise<Post> {
 		try {
-			this.debug.start("Restoring post", { id });
+			this.debug.start("Restoring post", { id, requesterId, requesterRole });
 
 			this.debug.step("Validating post ID", { id });
 			const validatedId = postId.parse(id);
@@ -415,7 +422,17 @@ export class PostService extends Debuggable {
 				this.debug.warn("Post is not marked as deleted, cannot restore", { id: validatedId });
 				throw new ConflictError("Post is not deleted", { id: validatedId });
 			}
-			this.debug.info("Post is marked as deleted, proceeding with restoration", { id: validatedId });
+			this.debug.info("Post is marked as deleted, checking restore authorization", { id: validatedId });
+
+			const isAdminOrModerator = requesterRole === "ADMIN" || requesterRole === "MODERATOR";
+			const selfDeleted = existingPost.deletedBy === requesterId;
+
+			this.debug.step("Checking restore authorization", { isAdminOrModerator, selfDeleted, deletedBy: existingPost.deletedBy });
+			if (!isAdminOrModerator && !selfDeleted) {
+				this.debug.warn("Post was deleted by admin/mod, author cannot restore it", { id: validatedId });
+				throw new ForbiddenError("Cannot restore post deleted by an administrator or moderator", { id: validatedId });
+			}
+			this.debug.info("Restore authorization passed", { id: validatedId });
 
 			this.debug.step("Restoring post in the repository", { id: validatedId });
 			await this.repository.restorePost(validatedId);

@@ -5,7 +5,7 @@ import Elysia from "elysia";
 import z from "zod";
 
 export const postController = new Elysia({ name: "post", prefix: "/post" })
-    .post("/", async ({ 
+    .post("/", async ({
         body,
         // @ts-ignore
         user
@@ -22,7 +22,7 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         auth: true,
         detail: {
             summary: "Create Post",
-            description: "Create a new post. Only users with the ADMIN role can create posts. The authenticated user's ID will be used as the author of the post.",
+            description: "Create a new post. The authenticated user becomes the author.",
             tags: ["Post"],
         },
     })
@@ -31,10 +31,9 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         // @ts-ignore
         user
     }) => {
-        const isAdminOrModerator = user.role === "ADMIN" || user.role === "MODERATOR";
-
         const result = await postService.getById(params.id);
 
+        const isAdminOrModerator = user.role === "ADMIN" || user.role === "MODERATOR";
         const isAuthor = result.authorId === user.id;
         if (!isAdminOrModerator && !isAuthor) {
             throw new ForbiddenError("Cannot access post", { userId: user.id, userRole: user.role, postAuthorId: result.authorId });
@@ -48,7 +47,7 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         auth: true,
         detail: {
             summary: "Get Post by ID",
-            description: "Retrieve a post by its unique identifier. Only users with the ADMIN or MODERATOR role can access this endpoint.",
+            description: "Retrieve a post by its unique identifier. Only the post author, ADMIN, or MODERATOR can access this endpoint.",
             tags: ["Post"],
         },
     })
@@ -56,7 +55,6 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         params
     }) => {
         const result = await postService.getBySlug(params.slug);
-
         return result.toJSON();
     }, {
         params: z.object({
@@ -64,7 +62,7 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         }),
         detail: {
             summary: "Get Post by Slug",
-            description: "Retrieve a post by its unique slug.",
+            description: "Retrieve a published post by its unique slug. No authentication required.",
             tags: ["Post"],
         },
     })
@@ -72,7 +70,6 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         query
     }) => {
         const result = await postService.getAll(query);
-
         return result.map(post => post.toJSON());
     }, {
         query: getAllPostsSchema,
@@ -83,25 +80,25 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         },
     })
     .patch("/", async ({
-        body, 
+        body,
         // @ts-ignore
-        user 
+        user
     }) => {
-        const result = await postService.update(body);
-
-        const isAdminOrModerator = user.role === "ADMIN" || user.role === "MODERATOR";
-        const isAuthor = result.authorId === user.id;
-        if (!isAdminOrModerator && !isAuthor) {
-            throw new ForbiddenError("Cannot update post", { userId: user.id, userRole: user.role, postAuthorId: result.authorId });
+        // Fetch the post first to check authorship before modifying
+        const existing = await postService.getById(body.id);
+        const isAuthor = existing.authorId === user.id;
+        if (!isAuthor) {
+            throw new ForbiddenError("Only the post author can modify post content", { userId: user.id, postAuthorId: existing.authorId });
         }
 
+        const result = await postService.update(body);
         return result.toJSON();
     }, {
         body: updatePostInputSchema,
         auth: true,
         detail: {
             summary: "Update Post",
-            description: "Update an existing post. Only the title, content, and categoryId can be updated.",
+            description: "Update an existing post. Only the post author can modify content.",
             tags: ["Post"],
         },
     })
@@ -110,14 +107,14 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         // @ts-ignore
         user
     }) => {
-        const result = await postService.delete(params.id);
-
+        const existing = await postService.getById(params.id);
         const isAdminOrModerator = user.role === "ADMIN" || user.role === "MODERATOR";
-        const isAuthor = result.authorId === user.id;
+        const isAuthor = existing.authorId === user.id;
         if (!isAdminOrModerator && !isAuthor) {
-            throw new ForbiddenError("Cannot delete post", { userId: user.id, userRole: user.role, postAuthorId: result.authorId });
+            throw new ForbiddenError("Cannot delete post", { userId: user.id, userRole: user.role, postAuthorId: existing.authorId });
         }
 
+        const result = await postService.delete(params.id, user.id);
         return result.toJSON();
     }, {
         params: z.object({
@@ -126,7 +123,7 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         auth: true,
         detail: {
             summary: "Delete Post",
-            description: "Delete a post by its unique identifier. This is a soft delete, meaning the post can be restored later if needed. Only users with the ADMIN role can delete posts.",
+            description: "Soft-delete a post. ADMIN, MODERATOR, or the post author can delete. A post deleted by admin/mod cannot be restored by the author.",
             tags: ["Post"],
         },
     })
@@ -135,14 +132,7 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         // @ts-ignore
         user
     }) => {
-        const result = await postService.restore(params.id);
-
-        const isAdminOrModerator = user.role === "ADMIN" || user.role === "MODERATOR";
-        const isAuthor = result.authorId === user.id;
-        if (!isAdminOrModerator && !isAuthor) {
-            throw new ForbiddenError("Cannot restore post", { userId: user.id, userRole: user.role, postAuthorId: result.authorId });
-        }
-
+        const result = await postService.restore(params.id, user.id, user.role);
         return result.toJSON();
     }, {
         params: z.object({
@@ -151,7 +141,7 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         auth: true,
         detail: {
             summary: "Restore Post",
-            description: "Restore a previously deleted post by its unique identifier. Only users with the ADMIN role can restore posts.",
+            description: "Restore a soft-deleted post. ADMIN/MODERATOR can always restore. Authors can only restore if they performed the deletion themselves.",
             tags: ["Post"],
         },
     })
@@ -160,14 +150,7 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         // @ts-ignore
         user
     }) => {
-        const result = await postService.restore(params.id);
-
-        const isAdminOrModerator = user.role === "ADMIN" || user.role === "MODERATOR";
-        const isAuthor = result.authorId === user.id;
-        if (!isAdminOrModerator && !isAuthor) {
-            throw new ForbiddenError("Cannot restore post", { userId: user.id, userRole: user.role, postAuthorId: result.authorId });
-        }
-
+        const result = await postService.restore(params.id, user.id, user.role);
         return result.toJSON();
     }, {
         params: z.object({
@@ -176,7 +159,7 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         auth: true,
         detail: {
             summary: "Restore Post",
-            description: "Restore a previously deleted post by its unique identifier. Only users with the ADMIN role can restore posts.",
+            description: "Restore a soft-deleted post. ADMIN/MODERATOR can always restore. Authors can only restore if they performed the deletion themselves.",
             tags: ["Post"],
         },
     })
@@ -191,7 +174,6 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         }
 
         await postService.hardDelete(params.id);
-
         return { message: "Post permanently deleted" };
     }, {
         params: z.object({
@@ -200,7 +182,7 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         auth: true,
         detail: {
             summary: "Hard Delete Post",
-            description: "Permanently delete a post by its unique identifier. This action cannot be undone. Only users with the ADMIN role can perform this action.",
+            description: "Permanently delete a post. Only ADMIN can perform this action.",
             tags: ["Post"],
         },
     })

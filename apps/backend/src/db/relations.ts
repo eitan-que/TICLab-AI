@@ -57,6 +57,10 @@ export const relations = defineRelations(schema, (r) => ({
 			from: r.post.authorId,
 			to: r.user.id,
 		}),
+		deletedByUser: r.one.user({
+			from: r.post.deletedBy,
+			to: r.user.id,
+		}),
 		category: r.one.category({
 			from: r.post.categoryId,
 			to: r.category.id,
@@ -77,6 +81,10 @@ export const relations = defineRelations(schema, (r) => ({
 	comment: {
 		author: r.one.user({
 			from: r.comment.authorId,
+			to: r.user.id,
+		}),
+		deletedByUser: r.one.user({
+			from: r.comment.deletedBy,
 			to: r.user.id,
 		}),
 		post: r.one.post({
@@ -115,5 +123,15 @@ export const relations = defineRelations(schema, (r) => ({
 			from: r.tag.id.through(r.postTags.tagId),
 			to: r.post.id.through(r.postTags.postId),
 		}),
-	}
+	},
+	postTags: {
+		post: r.one.post({
+			from: r.postTags.postId,
+			to: r.post.id,
+		}),
+		tag: r.one.tag({
+			from: r.postTags.tagId,
+			to: r.tag.id,
+		}),
+	},
 }));

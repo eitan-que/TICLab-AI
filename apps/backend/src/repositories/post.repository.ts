@@ -3,7 +3,7 @@ import { post } from "@/db/schema";
 import { Post } from "@/domain/post.domain";
 import { Debuggable } from "@/lib/debug";
 import { AppError, ParseZodError } from "@/lib/errors";
-import { CreatePost, createPostSchema, GetAllPosts, getAllPostsSchema, postId, PostId, postSlug, PostSlug, UpdatePost, updatePostSchema } from "@/validators/post.validator";
+import { CreatePost, createPostSchema, DeletePost, deletePostSchema, GetAllPosts, getAllPostsSchema, postId, PostId, postSlug, PostSlug, UpdatePost, updatePostSchema } from "@/validators/post.validator";
 import { eq, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 
@@ -13,7 +13,7 @@ export interface PostRepositoryTemplate {
     getPostBySlug(slug: PostSlug): Promise<Post | null>;
     getAllPosts(query: GetAllPosts): Promise<Post[]>;
     updatePost(data: UpdatePost): Promise<Post>;
-    deletePost(id: PostId): Promise<void>;
+    deletePost(data: DeletePost): Promise<void>;
     restorePost(id: PostId): Promise<void>;
     hardDeletePost(id: PostId): Promise<void>;
 }
@@ -84,6 +84,7 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
                 createdPost.published,
                 createdPost.authorId,
                 createdPost.categoryId,
+                createdPost.deletedBy,
                 createdPost.createdAt,
                 createdPost.updatedAt,
                 createdPost.deletedAt
@@ -151,7 +152,7 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             }
             this.debug.info("Post found", { postId: postData.id });
 
-            this.debug.step("Mapping database record to Category domain object");
+            this.debug.step("Mapping database record to Post domain object");
             const postInstance = new Post(
                 postData.id,
                 postData.slug,
@@ -160,6 +161,7 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
                 postData.published,
                 postData.authorId,
                 postData.categoryId,
+                postData.deletedBy,
                 postData.createdAt,
                 postData.updatedAt,
                 postData.deletedAt
@@ -236,6 +238,7 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
                 postData.published,
                 postData.authorId,
                 postData.categoryId,
+                postData.deletedBy,
                 postData.createdAt,
                 postData.updatedAt,
                 postData.deletedAt
@@ -300,12 +303,13 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             this.debug.step("Mapping database records to Post domain objects");
             const posts = postsData.map(postData => new Post(
                 postData.id,
-                postData.title,
                 postData.slug,
+                postData.title,
                 postData.content,
                 postData.published,
                 postData.authorId,
                 postData.categoryId,
+                postData.deletedBy,
                 postData.createdAt,
                 postData.updatedAt,
                 postData.deletedAt
@@ -368,12 +372,13 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             this.debug.step("Mapping database record to Post domain object");
             const postInstance = new Post(
                 postData.id,
-                postData.title,
                 postData.slug,
+                postData.title,
                 postData.content,
                 postData.published,
                 postData.authorId,
                 postData.categoryId,
+                postData.deletedBy,
                 postData.createdAt,
                 postData.updatedAt,
                 postData.deletedAt
@@ -408,22 +413,23 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
      * @throws {BadRequestError} If the provided ID fails validation against the PostId schema, with details about the validation errors.
      * @throws {AppError} If an unexpected error occurs during the database operation, with details about the error.
      */
-    async deletePost(id: PostId): Promise<void> {
+    async deletePost(data: DeletePost): Promise<void> {
         try {
             this.debug.start("Deleting post");
 
-            this.debug.step("Validating post ID", { id });
-            const validatedId = postId.parse(id);
-            this.debug.info("Post ID validated successfully", { validatedId });
+            this.debug.step("Validating input data", { ...data });
+            const validatedData = deletePostSchema.parse(data);
+            this.debug.info("Input data validated successfully", { ...validatedData });
 
-            this.debug.step("Updating post in database to set deletedAt timestamp");
+            this.debug.step("Updating post in database to set deletedAt timestamp and deletedBy");
             await db.update(post)
                 .set({
                     deletedAt: new Date(),
+                    deletedBy: validatedData.deletedBy,
                     updatedAt: new Date(),
                 })
-                .where(eq(post.id, validatedId));
-            this.debug.info("Post marked as deleted successfully", { postId: validatedId });
+                .where(eq(post.id, validatedData.id));
+            this.debug.info("Post marked as deleted successfully", { postId: validatedData.id });
 
             this.debug.finish("Post deletion process completed");
             return;
@@ -461,10 +467,11 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             const validatedId = postId.parse(id);
             this.debug.info("Post ID validated successfully", { validatedId });
 
-            this.debug.step("Updating post in database to set deletedAt to null");
+            this.debug.step("Updating post in database to clear deletedAt and deletedBy");
             await db.update(post)
                 .set({
                     deletedAt: null,
+                    deletedBy: null,
                     updatedAt: new Date(),
                 })
                 .where(eq(post.id, validatedId));

@@ -79,6 +79,8 @@ export const post = pgTable("post", {
   categoryId: uuid("category_id")
     .notNull()
     .references(() => category.id, { onDelete: "cascade"}),
+  deletedBy: uuid("deleted_by")
+    .references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .$onUpdate(() => /* @__PURE__ */ new Date())
@@ -90,6 +92,7 @@ export const post = pgTable("post", {
     uniqueIndex("post_slug_idx").on(table.slug),
     index("post_authorId_idx").on(table.authorId),
     index("post_categoryId_idx").on(table.categoryId),
+    index("post_deletedBy_idx").on(table.deletedBy),
   ]
 );
 
@@ -101,6 +104,8 @@ export const comment = pgTable("comment", {
   postId: uuid("post_id")
     .notNull()
     .references(() => post.id, { onDelete: "cascade" }),
+  deletedBy: uuid("deleted_by")
+    .references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .$onUpdate(() => /* @__PURE__ */ new Date())
@@ -110,6 +115,7 @@ export const comment = pgTable("comment", {
   (table) => [
     index("comment_authorId_idx").on(table.authorId),
     index("comment_postId_idx").on(table.postId),
+    index("comment_deletedBy_idx").on(table.deletedBy),
   ]
 );
 

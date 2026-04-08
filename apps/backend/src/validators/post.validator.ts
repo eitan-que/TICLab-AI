@@ -207,13 +207,22 @@ export const getAllPostsSchema = z.object({
 export type GetAllPosts = z.infer<typeof getAllPostsSchema>;
 
 /**
+ * DeletedBy: A UUID string that identifies the user who deleted the post.
+ */
+export const deletedBy = z.uuid({ error: "POST_DELETED_BY_INVALID" }).nullable();
+
+export type DeletedBy = z.infer<typeof deletedBy>;
+
+/**
  * DeletePostInput: The expected shape of the input when deleting a post.
  * - id: Required, must be a valid UUID.
+ * - deletedBy: Required, must be a valid UUID identifying who deleted the post.
  * Used for validating incoming data when deleting a post.
  * Used only for server-side operations.
  */
 export const deletePostSchema = z.object({
     id: postId,
+    deletedBy: deletedBy,
 }, {
     error: "DELETE_POST_INPUT_INVALID"
 });
