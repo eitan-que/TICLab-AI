@@ -26,39 +26,29 @@ export class TagService extends Debuggable {
     }
 
     /**
-     * ## Create Tag (find-or-create)
-     * Creates a new tag, or returns the existing tag if one with the same name already exists.
-     * Tags function like hashtags — they are global and shared across all users and posts.
-     * Any authenticated user can create a tag. If a tag with the exact same name is found,
-     * that tag is returned instead of creating a duplicate.
+     * ## Create Tag
+     * Creates a new tag in the system.
+     * Validates the input data and associates the tag with the creating user.
+     * To add a tag to a post by name with find-or-create semantics, use {@link addTagByNameToPost} instead.
      * @param data - The input data for creating a tag, conforming to CreateTagInput.
      * @param createdById - The ID of the authenticated user creating the tag.
-     * @returns A promise that resolves to the existing or newly created Tag object.
+     * @returns A promise that resolves to the created Tag object.
      * @throws {ValidationError} If the input data does not meet the validation criteria.
      * @throws {AppError} If an unexpected error occurs during creation.
      * @example
      * ```ts
-     * // Returns existing tag if "typescript" already exists, otherwise creates it
      * const tag = await tagService.create({ name: "typescript" }, "user-id-123");
      * ```
      */
     async create(data: CreateTagInput, createdById: string): Promise<Tag> {
         try {
-            this.debug.start("Creating tag (find-or-create)");
+            this.debug.start("Creating tag");
 
             this.debug.step("Validating input data", { ...data });
             const validatedData = createTagInputSchema.parse(data);
             this.debug.info("Input data validated successfully", { ...validatedData });
 
-            this.debug.step("Checking if tag with same name already exists", { name: validatedData.name });
-            const existing = await this.repository.getTagByName(validatedData.name);
-            if (existing && !existing.deletedAt) {
-                this.debug.info("Existing active tag found, returning it", { tagId: existing.id });
-                this.debug.finish("Tag find-or-create completed (found existing)");
-                return existing;
-            }
-
-            this.debug.step("No existing tag found, creating new tag");
+            this.debug.step("Creating tag in repository");
             const created = await this.repository.createTag({
                 name: validatedData.name,
                 createdBy: createdById,
@@ -392,6 +382,123 @@ export class TagService extends Debuggable {
             if (err instanceof ZodError) throw ParseZodError(err);
             if (err instanceof AppError) throw err;
             throw new AppError("Unexpected error during tags by post retrieval", "TAGS_BY_POST_RETRIEVAL_ERROR", 500, { error: err });
+        }
+    }
+
+    /**
+     * ## Add Tag by Name to Post
+     * Finds or creates a tag by name and then links it to the given post.
+     * Tags behave like hashtags — if a tag with the exact name already exists (and is not deleted),
+     * that tag is reused. Otherwise a new tag is created and then linked to the post.
+     * Only the post author, ADMIN, or MODERATOR can add tags to a post.
+     * @param postId - The ID of the post to tag.
+     * @param tagName - The name of the tag to find or create.
+     * @param requesterId - The ID of the user performing the action.
+     * @param requesterRole - The role of the user performing the action.
+     * @returns A promise that resolves to the Tag that was linked to the post.
+     * @throws {NotFoundError} If the post does not exist or is deleted.
+     * @throws {ForbiddenError} If the requester is not the post author, ADMIN, or MODERATOR.
+     * @throws {AppError} If an unexpected error occurs.
+     * @example
+     * ```ts
+     * const tag = await tagService.addTagByNameToPost("post-id-123", "typescript", "user-id-456", "USER");
+     * ```
+     */
+    async addTagByNameToPost(postId: string, tagName: string, requesterId: string, requesterRole: string): Promise<Tag> {
+        try {
+            this.debug.start("Adding tag by name to post", { postId, tagName, requesterId, requesterRole });
+
+            this.debug.step("Validating post existence", { postId });
+            const post = await postService.getById(postId);
+            if (post.deletedAt) {
+                throw new NotFoundError("Post not found", { postId });
+            }
+
+            const isAdminOrModerator = requesterRole === "ADMIN" || requesterRole === "MODERATOR";
+            const isAuthor = post.authorId === requesterId;
+            if (!isAdminOrModerator && !isAuthor) {
+                throw new ForbiddenError("Cannot modify tags for this post", { userId: requesterId, postAuthorId: post.authorId });
+            }
+
+            this.debug.step("Finding or creating tag by name", { tagName });
+            const existing = await this.repository.getTagByName(tagName);
+            const tag = (existing && !existing.deletedAt)
+                ? existing
+                : await this.repository.createTag({ name: tagName, createdBy: requesterId });
+            this.debug.info("Tag resolved", { tagId: tag.id, created: !existing || !!existing.deletedAt });
+
+            this.debug.step("Linking tag to post", { postId, tagId: tag.id });
+            await this.repository.addTagToPost({ postId, tagId: tag.id });
+
+            this.debug.finish("Tag added to post by name successfully");
+            return tag;
+
+        } catch (err) {
+            this.debug.error("Error occurred during addTagByNameToPost", { error: err });
+            if (err instanceof ZodError) throw ParseZodError(err);
+            if (err instanceof AppError) throw err;
+            throw new AppError("Unexpected error during addTagByNameToPost", "POST_TAG_ADD_BY_NAME_ERROR", 500, { error: err });
+        }
+    }
+
+    /**
+     * ## Sync Tags for Post
+     * Replaces all tags on a post with the provided list of tag names.
+     * Removes every existing tag association, then find-or-creates each tag by name and links it.
+     * Idempotent — calling with the same names results in the same state.
+     * Only the post author, ADMIN, or MODERATOR can sync tags on a post.
+     * @param postId - The ID of the post whose tags should be replaced.
+     * @param tagNames - The list of tag names that should be set on the post.
+     * @param requesterId - The ID of the user performing the action.
+     * @param requesterRole - The role of the user performing the action.
+     * @returns A promise that resolves to the array of Tag objects now linked to the post.
+     * @throws {NotFoundError} If the post does not exist or is deleted.
+     * @throws {ForbiddenError} If the requester is not the post author, ADMIN, or MODERATOR.
+     * @throws {AppError} If an unexpected error occurs.
+     * @example
+     * ```ts
+     * // Sets post's tags to exactly ["typescript", "backend"] — removes any tags not in the list
+     * const tags = await tagService.syncTagsForPost("post-id-123", ["typescript", "backend"], "user-id-456", "USER");
+     * ```
+     */
+    async syncTagsForPost(postId: string, tagNames: string[], requesterId: string, requesterRole: string): Promise<Tag[]> {
+        try {
+            this.debug.start("Syncing tags for post", { postId, tagNames, requesterId, requesterRole });
+
+            this.debug.step("Validating post existence", { postId });
+            const post = await postService.getById(postId);
+            if (post.deletedAt) {
+                throw new NotFoundError("Post not found", { postId });
+            }
+
+            const isAdminOrModerator = requesterRole === "ADMIN" || requesterRole === "MODERATOR";
+            const isAuthor = post.authorId === requesterId;
+            if (!isAdminOrModerator && !isAuthor) {
+                throw new ForbiddenError("Cannot modify tags for this post", { userId: requesterId, postAuthorId: post.authorId });
+            }
+
+            this.debug.step("Removing all existing tags from post", { postId });
+            await this.repository.removeAllTagsFromPost(postId);
+
+            this.debug.step("Adding new tags", { tagNames });
+            const tags: Tag[] = [];
+            for (const name of tagNames) {
+                const existing = await this.repository.getTagByName(name);
+                const tag = (existing && !existing.deletedAt)
+                    ? existing
+                    : await this.repository.createTag({ name, createdBy: requesterId });
+                await this.repository.addTagToPost({ postId, tagId: tag.id });
+                tags.push(tag);
+            }
+
+            this.debug.finish("Tag sync for post completed successfully", { count: tags.length });
+            return tags;
+
+        } catch (err) {
+            this.debug.error("Error occurred during syncTagsForPost", { error: err });
+            if (err instanceof ZodError) throw ParseZodError(err);
+            if (err instanceof AppError) throw err;
+            throw new AppError("Unexpected error during syncTagsForPost", "POST_TAGS_SYNC_ERROR", 500, { error: err });
         }
     }
 }

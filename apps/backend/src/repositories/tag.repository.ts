@@ -24,6 +24,7 @@ export interface TagRepositoryTemplate {
     hardDeleteTag(id: TagId): Promise<void>;
     addTagToPost(data: PostTag): Promise<void>;
     removeTagFromPost(data: PostTag): Promise<void>;
+    removeAllTagsFromPost(postId: string): Promise<void>;
     getTagsByPostId(postId: string): Promise<Tag[]>;
 }
 
@@ -410,6 +411,34 @@ export class TagRepository extends Debuggable implements TagRepositoryTemplate {
             this.debug.error("Error occurred while removing tag from post", { error: err });
             if (err instanceof ZodError) throw ParseZodError(err);
             throw new AppError("Unexpected error during removing tag from post", "POST_TAG_REMOVE_ERROR", 500, { error: err });
+        }
+    }
+
+    /**
+     * ## Remove All Tags from Post
+     * Removes all tag associations from a post by deleting every row in the postTags join table for the given postId.
+     * Used before re-syncing a post's tags so the full set can be replaced atomically.
+     * @param postId - The UUID of the post whose tags should all be removed.
+     * @returns A promise that resolves when all tag associations have been removed.
+     * @throws {AppError} If an unexpected error occurs during removal.
+     * @example
+     * ```ts
+     * await tagRepository.removeAllTagsFromPost("post-id-123");
+     * ```
+     */
+    async removeAllTagsFromPost(postId: string): Promise<void> {
+        try {
+            this.debug.start("Removing all tags from post", { postId });
+
+            await db.delete(postTags).where(eq(postTags.postId, postId));
+            this.debug.info("All tags removed from post successfully", { postId });
+
+            this.debug.finish("Remove all tags from post process completed");
+
+        } catch (err) {
+            this.debug.error("Error occurred while removing all tags from post", { error: err });
+            if (err instanceof ZodError) throw ParseZodError(err);
+            throw new AppError("Unexpected error during removing all tags from post", "POST_TAGS_REMOVE_ALL_ERROR", 500, { error: err });
         }
     }
 

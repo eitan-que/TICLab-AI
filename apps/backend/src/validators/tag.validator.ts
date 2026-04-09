@@ -8,11 +8,13 @@ export const tagId = z.uuid({ error: "TAG_ID_INVALID" });
 export type TagId = z.infer<typeof tagId>;
 
 /**
- * TagName: The display name of the tag. Must be 1-100 characters, trimmed.
+ * TagName: The display name of the tag. Must be 1-100 alphanumeric characters (letters and numbers only), trimmed.
+ * No spaces, hyphens, or special characters are allowed — tags behave like hashtags.
  */
 export const tagName = z.string({ error: "TAG_NAME_INVALID" })
     .min(1, { error: "TAG_NAME_TOO_SHORT" })
     .max(100, { error: "TAG_NAME_TOO_LONG" })
+    .regex(/^[a-zA-Z0-9]+$/, { error: "TAG_NAME_INVALID_FORMAT" })
     .trim();
 
 export type TagName = z.infer<typeof tagName>;

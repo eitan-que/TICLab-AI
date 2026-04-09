@@ -1,5 +1,6 @@
 import { ForbiddenError } from "@/lib/errors";
 import { postService } from "@/services/post.service";
+import { tagService } from "@/services/tag.service";
 import { createPostInputSchema, getAllPostsSchema, postId, postSlug, updatePostInputSchema } from "@/validators/post.validator";
 import Elysia from "elysia";
 import z from "zod";
@@ -14,8 +15,13 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
             title: body.title,
             content: body.content,
             authorId: user.id,
-            categoryId: body.categoryId
+            categoryId: body.categoryId,
         });
+
+        if (body.tags && body.tags.length > 0) {
+            await tagService.syncTagsForPost(result.id, body.tags, user.id, user.role);
+        }
+
         return result.toJSON();
     }, {
         body: createPostInputSchema.omit({ authorId: true }),
@@ -92,6 +98,11 @@ export const postController = new Elysia({ name: "post", prefix: "/post" })
         }
 
         const result = await postService.update(body);
+
+        if (body.tags !== undefined) {
+            await tagService.syncTagsForPost(result.id, body.tags, user.id, user.role);
+        }
+
         return result.toJSON();
     }, {
         body: updatePostInputSchema,
