@@ -11,6 +11,12 @@ import {
 import { ZodError } from "zod";
 import { postService } from "@/services/post.service";
 
+/**
+ * CommentService handles all business logic related to comments.
+ * It validates inputs, enforces authorization rules, and delegates persistence to the repository.
+ * All methods throw typed errors (ValidationError, NotFoundError, ConflictError, ForbiddenError, AppError)
+ * to allow consistent error handling at the controller layer.
+ */
 export class CommentService extends Debuggable {
     constructor(
         private repository: CommentRepositoryTemplate
@@ -18,6 +24,21 @@ export class CommentService extends Debuggable {
         super();
     }
 
+    /**
+     * ## Create Comment
+     * Creates a new comment on a post.
+     * Validates the input data and confirms the target post exists and is not deleted.
+     * @param data - The input data for creating a comment, conforming to CreateCommentInput.
+     * @param authorId - The ID of the user creating the comment, or null for anonymous comments.
+     * @returns A promise that resolves to the created Comment object.
+     * @throws {ValidationError} If the input data does not meet the validation criteria.
+     * @throws {NotFoundError} If the target post does not exist or is deleted.
+     * @throws {AppError} If an unexpected error occurs during creation.
+     * @example
+     * ```ts
+     * const comment = await commentService.create({ content: "Nice post!", postId: "post-id-123" }, "user-id-456");
+     * ```
+     */
     async create(data: CreateCommentInput, authorId: string | null): Promise<Comment> {
         try {
             this.debug.start("Creating comment");
@@ -54,6 +75,20 @@ export class CommentService extends Debuggable {
         }
     }
 
+    /**
+     * ## Get Comment by ID
+     * Retrieves a comment by its unique identifier.
+     * Validates the ID format and throws a NotFoundError if no comment is found.
+     * @param id - The unique identifier of the comment to retrieve.
+     * @returns A promise that resolves to the retrieved Comment object.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria.
+     * @throws {NotFoundError} If no comment is found with the provided ID.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const comment = await commentService.getById("comment-id-123");
+     * ```
+     */
     async getById(id: CommentId): Promise<Comment> {
         try {
             this.debug.start("Retrieving comment by ID", { id });
@@ -80,6 +115,19 @@ export class CommentService extends Debuggable {
         }
     }
 
+    /**
+     * ## Get All Comments
+     * Retrieves a list of comments based on the provided query parameters.
+     * Validates query parameters before delegating to the repository.
+     * @param query - The query parameters for filtering and paginating comments, conforming to GetAllComments.
+     * @returns A promise that resolves to an array of Comment objects matching the query.
+     * @throws {ValidationError} If the provided query parameters do not meet the validation criteria.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const comments = await commentService.getAll({ postId: "post-id-123", page: 1, limit: 10 });
+     * ```
+     */
     async getAll(query: GetAllComments): Promise<Comment[]> {
         try {
             this.debug.start("Retrieving all comments", { ...query });
@@ -103,6 +151,20 @@ export class CommentService extends Debuggable {
         }
     }
 
+    /**
+     * ## Update Comment
+     * Updates an existing comment's content.
+     * Validates input data, confirms the comment exists and is not deleted, then persists the changes.
+     * @param data - The update payload conforming to UpdateCommentInput, including the comment ID.
+     * @returns A promise that resolves to the updated Comment object.
+     * @throws {ValidationError} If the input data does not meet the validation criteria.
+     * @throws {NotFoundError} If the comment does not exist or is already deleted.
+     * @throws {AppError} If an unexpected error occurs during the update.
+     * @example
+     * ```ts
+     * const updated = await commentService.update({ id: "comment-id-123", content: "Updated text." });
+     * ```
+     */
     async update(data: UpdateCommentInput): Promise<Comment> {
         try {
             this.debug.start("Updating comment", { ...data });
@@ -133,6 +195,22 @@ export class CommentService extends Debuggable {
         }
     }
 
+    /**
+     * ## Delete Comment
+     * Soft-deletes a comment by setting its deletedAt timestamp and recording who deleted it.
+     * Throws a ConflictError if the comment is already deleted.
+     * @param id - The unique identifier of the comment to delete.
+     * @param deletedById - The ID of the user performing the deletion.
+     * @returns A promise that resolves to the soft-deleted Comment object.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria.
+     * @throws {NotFoundError} If the comment does not exist.
+     * @throws {ConflictError} If the comment is already deleted.
+     * @throws {AppError} If an unexpected error occurs during deletion.
+     * @example
+     * ```ts
+     * const deleted = await commentService.delete("comment-id-123", "user-id-456");
+     * ```
+     */
     async delete(id: CommentId, deletedById: string): Promise<Comment> {
         try {
             this.debug.start("Deleting comment", { id, deletedById });
@@ -212,6 +290,20 @@ export class CommentService extends Debuggable {
         }
     }
 
+    /**
+     * ## Hard Delete Comment
+     * Permanently removes a comment from the database. The comment must be soft-deleted first.
+     * @param id - The unique identifier of the comment to permanently delete.
+     * @returns A promise that resolves when the comment has been permanently deleted.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria.
+     * @throws {NotFoundError} If the comment does not exist.
+     * @throws {ConflictError} If the comment is not soft-deleted (must be deleted before hard deleting).
+     * @throws {AppError} If an unexpected error occurs during hard deletion.
+     * @example
+     * ```ts
+     * await commentService.hardDelete("comment-id-123");
+     * ```
+     */
     async hardDelete(id: CommentId): Promise<void> {
         try {
             this.debug.start("Hard deleting comment", { id });

@@ -55,6 +55,25 @@ function hasBalancedFencedCodeBlocks(markdown: string): boolean {
     return openFence === null;
 }
 
+/**
+ * This function validates whether the given content is a well-formed Markdown string.
+ * It checks for null bytes (which would indicate binary content) and then verifies that
+ * all fenced code blocks are balanced using `hasBalancedFencedCodeBlocks`.
+ * Finally, it attempts to lex the content using the `marked` library's GFM lexer to
+ * confirm it can be parsed as valid GitHub Flavored Markdown.
+ * @param content The content string to validate as Markdown.
+ * @returns A boolean indicating whether the content is valid Markdown.
+ * @example
+ * ```ts
+ * const valid = isValidMarkdownFormat("# Hello\n\nThis is **bold**.");
+ * // valid would be true
+ * ```
+ * @example
+ * ```ts
+ * const valid = isValidMarkdownFormat("Hello\u0000World");
+ * // valid would be false (contains null byte)
+ * ```
+ */
 function isValidMarkdownFormat(content: string): boolean {
     if (/\u0000/.test(content)) {
         return false;

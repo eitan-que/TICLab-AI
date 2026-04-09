@@ -6,6 +6,12 @@ import { createPostInputSchema, CreatePostInput, getAllPostsSchema, GetAllPosts,
 import { ZodError } from "zod";
 import { categoryService } from "@/services/category.service";
 
+/**
+ * PostService handles all business logic related to posts.
+ * It validates inputs, enforces authorization rules, and delegates persistence to the repository.
+ * All methods throw typed errors (ValidationError, NotFoundError, ConflictError, ForbiddenError, AppError)
+ * to allow consistent error handling at the controller layer.
+ */
 export class PostService extends Debuggable {
 	constructor(
 		private repository: PostRepositoryTemplate
@@ -385,25 +391,22 @@ export class PostService extends Debuggable {
 
 	/**
 	 * ## Restore Post
-	 * This method restores a previously deleted post based on its unique identifier (ID).
-	 * It validates the provided ID using the postId schema, and if the validation fails, it throws a ValidationError with details about the specific validation issues.
-	 * If the validation succeeds, it checks if the post exists by calling the getById method. If the post does not exist, it throws a NotFoundError.
-	 * If the post exists but is not marked as deleted, it throws a ConflictError indicating that the post cannot be restored because it is not deleted.
-	 * If the post exists and is marked as deleted, it calls the repository's restorePost method to restore the post in the database.
-	 * If an unexpected error occurs during validation or restoration, it throws an AppError with details about the error.
-	 * @param id - The unique identifier of the post to restore, which should conform to the PostId type.
-	 * @returns A promise that resolves to the restored Post object.
-	 * @throws {ValidationError} If the provided ID does not meet the validation criteria defined in the postId schema.
-	 * @throws {NotFoundError} If the post to be restored does not exist.
-	 * @throws {ConflictError} If the post is not marked as deleted and therefore cannot be restored.
-	 * @throws {AppError} If an unexpected error occurs during validation or post restoration.
-	 */
-	/**
-	 * Restores a soft-deleted post.
-	 * @param id - The post ID to restore.
+	 * Restores a previously soft-deleted post.
+	 * Validates the post ID, confirms the post exists and is marked as deleted, then enforces restore authorization:
+	 * only the user who deleted it or an ADMIN/MODERATOR can restore it.
+	 * @param id - The unique identifier of the post to restore, conforming to the PostId type.
 	 * @param requesterId - The ID of the user attempting the restore.
 	 * @param requesterRole - The role of the user attempting the restore.
+	 * @returns A promise that resolves to the restored Post object.
+	 * @throws {ValidationError} If the provided ID does not meet the validation criteria.
+	 * @throws {NotFoundError} If the post does not exist.
+	 * @throws {ConflictError} If the post is not marked as deleted.
 	 * @throws {ForbiddenError} If the post was deleted by an admin/mod and the requester is the author.
+	 * @throws {AppError} If an unexpected error occurs during restoration.
+	 * @example
+	 * ```ts
+	 * const restored = await postService.restore("post-id-123", "user-id-456", "AUTHOR");
+	 * ```
 	 */
 	async restore(id: PostId, requesterId: string, requesterRole: string): Promise<Post> {
 		try {

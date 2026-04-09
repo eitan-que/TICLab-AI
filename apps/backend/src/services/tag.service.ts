@@ -12,6 +12,12 @@ import {
 import { ZodError } from "zod";
 import { postService } from "@/services/post.service";
 
+/**
+ * TagService handles all business logic related to tags.
+ * It validates inputs, enforces authorization rules, and delegates persistence to the repository.
+ * All methods throw typed errors (ValidationError, NotFoundError, ConflictError, ForbiddenError, AppError)
+ * to allow consistent error handling at the controller layer.
+ */
 export class TagService extends Debuggable {
     constructor(
         private repository: TagRepositoryTemplate
@@ -19,6 +25,20 @@ export class TagService extends Debuggable {
         super();
     }
 
+    /**
+     * ## Create Tag
+     * Creates a new tag in the system.
+     * Validates the input data and associates the tag with the creating user.
+     * @param data - The input data for creating a tag, conforming to CreateTagInput.
+     * @param createdById - The ID of the user creating the tag.
+     * @returns A promise that resolves to the created Tag object.
+     * @throws {ValidationError} If the input data does not meet the validation criteria.
+     * @throws {AppError} If an unexpected error occurs during creation.
+     * @example
+     * ```ts
+     * const tag = await tagService.create({ name: "typescript" }, "user-id-123");
+     * ```
+     */
     async create(data: CreateTagInput, createdById: string): Promise<Tag> {
         try {
             this.debug.start("Creating tag");
@@ -45,6 +65,20 @@ export class TagService extends Debuggable {
         }
     }
 
+    /**
+     * ## Get Tag by ID
+     * Retrieves a tag by its unique identifier.
+     * Validates the ID format and throws a NotFoundError if no tag is found.
+     * @param id - The unique identifier of the tag to retrieve.
+     * @returns A promise that resolves to the retrieved Tag object.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria.
+     * @throws {NotFoundError} If no tag is found with the provided ID.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const tag = await tagService.getById("tag-id-123");
+     * ```
+     */
     async getById(id: TagId): Promise<Tag> {
         try {
             this.debug.start("Retrieving tag by ID", { id });
@@ -67,6 +101,19 @@ export class TagService extends Debuggable {
         }
     }
 
+    /**
+     * ## Get All Tags
+     * Retrieves a list of tags based on the provided query parameters.
+     * Validates query parameters before delegating to the repository.
+     * @param query - The query parameters for filtering and paginating tags, conforming to GetAllTags.
+     * @returns A promise that resolves to an array of Tag objects matching the query.
+     * @throws {ValidationError} If the provided query parameters do not meet the validation criteria.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const tags = await tagService.getAll({ page: 1, limit: 20 });
+     * ```
+     */
     async getAll(query: GetAllTags): Promise<Tag[]> {
         try {
             this.debug.start("Retrieving all tags", { ...query });
@@ -86,6 +133,20 @@ export class TagService extends Debuggable {
         }
     }
 
+    /**
+     * ## Update Tag
+     * Updates an existing tag's properties.
+     * Validates input data, confirms the tag exists and is not deleted, then persists the changes.
+     * @param data - The update payload conforming to UpdateTagInput, including the tag ID.
+     * @returns A promise that resolves to the updated Tag object.
+     * @throws {ValidationError} If the input data does not meet the validation criteria.
+     * @throws {NotFoundError} If the tag does not exist or is already deleted.
+     * @throws {AppError} If an unexpected error occurs during the update.
+     * @example
+     * ```ts
+     * const updated = await tagService.update({ id: "tag-id-123", name: "javascript" });
+     * ```
+     */
     async update(data: UpdateTagInput): Promise<Tag> {
         try {
             this.debug.start("Updating tag", { ...data });
@@ -109,6 +170,21 @@ export class TagService extends Debuggable {
         }
     }
 
+    /**
+     * ## Delete Tag
+     * Soft-deletes a tag by setting its deletedAt timestamp.
+     * Throws a ConflictError if the tag is already deleted.
+     * @param id - The unique identifier of the tag to delete.
+     * @returns A promise that resolves to the soft-deleted Tag object.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria.
+     * @throws {NotFoundError} If the tag does not exist.
+     * @throws {ConflictError} If the tag is already deleted.
+     * @throws {AppError} If an unexpected error occurs during deletion.
+     * @example
+     * ```ts
+     * const deleted = await tagService.delete("tag-id-123");
+     * ```
+     */
     async delete(id: TagId): Promise<Tag> {
         try {
             this.debug.start("Deleting tag", { id });
@@ -134,6 +210,21 @@ export class TagService extends Debuggable {
         }
     }
 
+    /**
+     * ## Restore Tag
+     * Restores a previously soft-deleted tag by clearing its deletedAt timestamp.
+     * Throws a ConflictError if the tag is not deleted.
+     * @param id - The unique identifier of the tag to restore.
+     * @returns A promise that resolves to the restored Tag object.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria.
+     * @throws {NotFoundError} If the tag does not exist.
+     * @throws {ConflictError} If the tag is not deleted.
+     * @throws {AppError} If an unexpected error occurs during restoration.
+     * @example
+     * ```ts
+     * const restored = await tagService.restore("tag-id-123");
+     * ```
+     */
     async restore(id: TagId): Promise<Tag> {
         try {
             this.debug.start("Restoring tag", { id });
@@ -159,6 +250,20 @@ export class TagService extends Debuggable {
         }
     }
 
+    /**
+     * ## Hard Delete Tag
+     * Permanently removes a tag from the database. The tag must be soft-deleted first.
+     * @param id - The unique identifier of the tag to permanently delete.
+     * @returns A promise that resolves when the tag has been permanently deleted.
+     * @throws {ValidationError} If the provided ID does not meet the validation criteria.
+     * @throws {NotFoundError} If the tag does not exist.
+     * @throws {ConflictError} If the tag is not soft-deleted (must be deleted before hard deleting).
+     * @throws {AppError} If an unexpected error occurs during hard deletion.
+     * @example
+     * ```ts
+     * await tagService.hardDelete("tag-id-123");
+     * ```
+     */
     async hardDelete(id: TagId): Promise<void> {
         try {
             this.debug.start("Hard deleting tag", { id });
@@ -254,6 +359,17 @@ export class TagService extends Debuggable {
         }
     }
 
+    /**
+     * ## Get Tags by Post
+     * Retrieves all tags associated with a specific post.
+     * @param postId - The ID of the post whose tags should be retrieved.
+     * @returns A promise that resolves to an array of Tag objects associated with the post.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const tags = await tagService.getTagsByPost("post-id-123");
+     * ```
+     */
     async getTagsByPost(postId: string): Promise<Tag[]> {
         try {
             this.debug.start("Getting tags by post", { postId });
