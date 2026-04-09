@@ -228,13 +228,25 @@ export class PostService extends Debuggable {
 	 * It validates the query parameters using the getAllPostsSchema, and if the validation fails, it throws a ValidationError with details about the specific validation issues.
 	 * If the validation succeeds, it calls the repository's getAllPosts method to fetch the posts from the database based on the query parameters.
 	 * If an unexpected error occurs during validation or retrieval, it throws an AppError with details about the error.
+	 * Supports filtering by `title` (partial match), `categoryId`, `authorId`, and `tags` (ALL-match: only posts that have every specified tag are returned).
 	 * @param query - The query parameters for retrieving posts, which should conform to the GetAllPosts type.
+	 * @param query.page - The page number for pagination (defaults to 1).
+	 * @param query.limit - The number of posts per page, between 1 and 100 (defaults to 10).
+	 * @param query.title - Optional title substring to filter posts by.
+	 * @param query.categoryId - Optional UUID to filter posts by category.
+	 * @param query.authorId - Optional UUID to filter posts by author.
+	 * @param query.tags - Optional array of tag names. Only posts that have ALL specified tags are returned.
 	 * @returns A promise that resolves to an array of Post objects that match the query parameters.
 	 * @throws {ValidationError} If the provided query parameters do not meet the validation criteria defined in the getAllPostsSchema.
 	 * @throws {AppError} If an unexpected error occurs during validation or post retrieval.
 	 * @example
 	 * ```ts
 	 * const posts = await postService.getAll({ title: "example", limit: 10, page: 1 });
+	 * ```
+	 * @example
+	 * ```ts
+	 * const posts = await postService.getAll({ tags: ["typescript", "backend"], page: 1, limit: 20 });
+	 * // Returns only posts that have both the "typescript" and "backend" tags
 	 * ```
 	 */
 	async getAll(query: GetAllPosts): Promise<Post[]> {

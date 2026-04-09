@@ -4,7 +4,8 @@ import { Post } from "@/domain/post.domain";
 import { Debuggable } from "@/lib/debug";
 import { AppError, ParseZodError } from "@/lib/errors";
 import { CreatePost, createPostSchema, DeletePost, deletePostSchema, GetAllPosts, getAllPostsSchema, postId, PostId, postSlug, PostSlug, UpdatePost, updatePostSchema } from "@/validators/post.validator";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
+import { postTags, tag } from "@/db/schema";
 import { ZodError } from "zod";
 
 export interface PostRepositoryTemplate {
@@ -259,13 +260,12 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
 
     /**
      * ## Get All Posts
-     * Retrieves a list of posts from the database based on the provided query parameters.
-     * Supports filtering by title and slug, as well as pagination through page and limit parameters.
-     * Validates the input query parameters against the GetAllPosts schema before attempting to retrieve data from the database.
-     * If validation fails, a BadRequestError is thrown with details about the validation errors.
-     * If an unexpected error occurs during the database operation, an AppError is thrown with details about the error.
-     * @param query - The query parameters for retrieving posts, which must conform to the GetAllPosts schema.
-     * @returns A promise that resolves to an array of Post objects that match the query criteria.
+     * Retrieves a paginated list of posts from the database based on the provided query parameters.
+     * Supports filtering by title (partial match), categoryId, authorId, and tags (ALL-match: only posts
+     * that have every specified tag are returned).
+     * Validates the input query parameters against the GetAllPosts schema before querying.
+     * @param query - The query parameters conforming to the GetAllPosts schema.
+     * @returns A promise that resolves to an array of Post objects matching the query criteria.
      * @example
      * ```ts
      * const posts = await postRepository.getAllPosts({
@@ -274,11 +274,11 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
      *   limit: 10,
      *   categoryId: "category-id-123",
      *   authorId: "user-id-123",
+     *   tags: ["typescript", "backend"],
      * });
-     * console.log("Retrieved posts:", posts);
      * ```
-     * @throws {BadRequestError} If the input query parameters fail validation against the GetAllPosts schema, with details about the validation errors.
-     * @throws {AppError} If an unexpected error occurs during the database operation, with details about the error.
+     * @throws {BadRequestError} If the input query parameters fail validation against the GetAllPosts schema.
+     * @throws {AppError} If an unexpected error occurs during the database operation.
      */
     async getAllPosts(query: GetAllPosts): Promise<Post[]> {
         try {
@@ -288,16 +288,48 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             const validatedQuery = getAllPostsSchema.parse(query);
             this.debug.info("Query parameters validated successfully", { ...validatedQuery });
 
+            // When filtering by tags, first resolve the matching post IDs via a join.
+            let tagFilteredPostIds: string[] | undefined;
+            if (validatedQuery.tags && validatedQuery.tags.length > 0) {
+                this.debug.step("Resolving post IDs for tag filter", { tags: validatedQuery.tags });
+
+                // For each tag name, find posts that have that tag. Take the intersection.
+                const tagPostIdSets = await Promise.all(
+                    validatedQuery.tags.map(async (name) => {
+                        const rows = await db
+                            .select({ postId: postTags.postId })
+                            .from(postTags)
+                            .innerJoin(tag, eq(postTags.tagId, tag.id))
+                            .where(eq(tag.name, name));
+                        return new Set(rows.map(r => r.postId));
+                    })
+                );
+
+                // Intersect all sets — only posts that have ALL specified tags
+                const [first, ...rest] = tagPostIdSets;
+                const intersection = rest.reduce((acc, set) => {
+                    return new Set([...acc].filter(id => set.has(id)));
+                }, first);
+
+                tagFilteredPostIds = [...intersection];
+                this.debug.info("Tag filter resolved", { matchingPostCount: tagFilteredPostIds.length });
+
+                // Short-circuit: no posts match all tags
+                if (tagFilteredPostIds.length === 0) {
+                    this.debug.finish("No posts match all specified tags");
+                    return [];
+                }
+            }
+
             this.debug.step("Retrieving posts from database");
             const postsData = await db.query.post.findMany({
                 where: {
-                    title: validatedQuery.title ? {
-                        like: `%${validatedQuery.title}%`,
-                    } : undefined,
+                    ...(validatedQuery.title ? { title: { like: `%${validatedQuery.title}%` } } : {}),
+                    ...(tagFilteredPostIds ? { id: { inArray: tagFilteredPostIds } } : {}),
                 },
                 offset: (validatedQuery.page - 1) * validatedQuery.limit,
                 limit: validatedQuery.limit,
-            })
+            });
             this.debug.info("Posts retrieved successfully", { count: postsData.length });
 
             this.debug.step("Mapping database records to Post domain objects");
@@ -314,7 +346,6 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
                 postData.updatedAt,
                 postData.deletedAt
             ));
-            this.debug.info("Post domain objects created successfully", { ...posts });
 
             this.debug.finish("Getting all posts");
             return posts;

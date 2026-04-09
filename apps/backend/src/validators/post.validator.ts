@@ -207,10 +207,10 @@ export type UpdatePost = z.infer<typeof updatePostSchema>;
  * GetAllPostsInput: The expected shape of the input when retrieving a list of posts.
  * - page: Optional, must be a positive integer, defaults to 1.
  * - limit: Optional, must be a positive integer between 1 and 100, defaults to 10.
- * - search: Optional, a string used for searching posts by title or content, max length 255.
  * - title: Optional, validated by postTitle schema if provided, used for filtering posts by title.
  * - categoryId: Optional, must be a valid UUID if provided, used for filtering posts by category.
  * - authorId: Optional, must be a valid UUID if provided, used for filtering posts by author.
+ * - tags: Optional, an array of tag names. When provided, only posts that have ALL of the specified tags are returned.
  * Used for validating incoming data when retrieving posts with pagination and filters.
  * Used only for server-side operations.
  */
@@ -220,6 +220,7 @@ export const getAllPostsSchema = z.object({
     title: postTitle.optional(),
     categoryId: categoryId.optional(),
     authorId: authorId.optional(),
+    tags: z.array(tagName, { error: "GET_POSTS_TAGS_INVALID" }).optional(),
 }, {
     error: "GET_POSTS_INPUT_INVALID"
 });
