@@ -4,8 +4,7 @@ import { Post } from "@/domain/post.domain";
 import { Debuggable } from "@/lib/debug";
 import { AppError, ParseZodError } from "@/lib/errors";
 import { CreatePost, createPostSchema, DeletePost, deletePostSchema, GetAllPosts, getAllPostsSchema, postId, PostId, postSlug, PostSlug, UpdatePost, updatePostSchema } from "@/validators/post.validator";
-import { eq, inArray, sql } from "drizzle-orm";
-import { postTags, tag } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 
 export interface PostRepositoryTemplate {
@@ -261,8 +260,7 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
     /**
      * ## Get All Posts
      * Retrieves a paginated list of posts from the database based on the provided query parameters.
-     * Supports filtering by title (partial match), categoryId, authorId, and tags (ALL-match: only posts
-     * that have every specified tag are returned).
+     * Supports filtering by title (partial match), categoryId, and authorId.
      * Validates the input query parameters against the GetAllPosts schema before querying.
      * @param query - The query parameters conforming to the GetAllPosts schema.
      * @returns A promise that resolves to an array of Post objects matching the query criteria.
@@ -274,7 +272,6 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
      *   limit: 10,
      *   categoryId: "category-id-123",
      *   authorId: "user-id-123",
-     *   tags: ["typescript", "backend"],
      * });
      * ```
      * @throws {BadRequestError} If the input query parameters fail validation against the GetAllPosts schema.
@@ -288,44 +285,10 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             const validatedQuery = getAllPostsSchema.parse(query);
             this.debug.info("Query parameters validated successfully", { ...validatedQuery });
 
-            // When filtering by tags, first resolve the matching post IDs via a join.
-            let tagFilteredPostIds: string[] | undefined;
-            if (validatedQuery.tags && validatedQuery.tags.length > 0) {
-                this.debug.step("Resolving post IDs for tag filter", { tags: validatedQuery.tags });
-
-                // For each tag name, find posts that have that tag. Take the intersection.
-                const tagPostIdSets = await Promise.all(
-                    validatedQuery.tags.map(async (name) => {
-                        const rows = await db
-                            .select({ postId: postTags.postId })
-                            .from(postTags)
-                            .innerJoin(tag, eq(postTags.tagId, tag.id))
-                            .where(eq(tag.name, name));
-                        return new Set(rows.map(r => r.postId));
-                    })
-                );
-
-                // Intersect all sets — only posts that have ALL specified tags
-                const [first, ...rest] = tagPostIdSets;
-                const intersection = rest.reduce((acc, set) => {
-                    return new Set([...acc].filter(id => set.has(id)));
-                }, first);
-
-                tagFilteredPostIds = [...intersection];
-                this.debug.info("Tag filter resolved", { matchingPostCount: tagFilteredPostIds.length });
-
-                // Short-circuit: no posts match all tags
-                if (tagFilteredPostIds.length === 0) {
-                    this.debug.finish("No posts match all specified tags");
-                    return [];
-                }
-            }
-
             this.debug.step("Retrieving posts from database");
             const postsData = await db.query.post.findMany({
                 where: {
                     ...(validatedQuery.title ? { title: { like: `%${validatedQuery.title}%` } } : {}),
-                    ...(tagFilteredPostIds ? { id: { inArray: tagFilteredPostIds } } : {}),
                 },
                 offset: (validatedQuery.page - 1) * validatedQuery.limit,
                 limit: validatedQuery.limit,

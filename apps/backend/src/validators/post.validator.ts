@@ -210,7 +210,6 @@ export type UpdatePost = z.infer<typeof updatePostSchema>;
  * - title: Optional, validated by postTitle schema if provided, used for filtering posts by title.
  * - categoryId: Optional, must be a valid UUID if provided, used for filtering posts by category.
  * - authorId: Optional, must be a valid UUID if provided, used for filtering posts by author.
- * - tags: Optional, an array of tag names. When provided, only posts that have ALL of the specified tags are returned.
  * Used for validating incoming data when retrieving posts with pagination and filters.
  * Used only for server-side operations.
  */
@@ -220,7 +219,6 @@ export const getAllPostsSchema = z.object({
     title: postTitle.optional(),
     categoryId: categoryId.optional(),
     authorId: authorId.optional(),
-    tags: z.array(tagName, { error: "GET_POSTS_TAGS_INVALID" }).optional(),
 }, {
     error: "GET_POSTS_INPUT_INVALID"
 });
