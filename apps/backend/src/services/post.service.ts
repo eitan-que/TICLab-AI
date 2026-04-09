@@ -321,8 +321,18 @@ export class PostService extends Debuggable {
             }
             this.debug.info("Post is not deleted, proceeding with update", { id: validatedData.id });
 
-			this.debug.step("Updating post in the repository", { ...validatedData });
-			const updatedPost = await this.repository.updatePost(validatedData);
+			this.debug.step("Generating slug from post title if title is provided", { title: validatedData.title });
+			const slug = validatedData.title ? Post.slugifyTitle(validatedData.title) : undefined;
+			this.debug.info("Slug generation step completed", { slug });
+
+			this.debug.step("Updating post in the repository", { ...validatedData, slug });
+			const updatedPost = await this.repository.updatePost({
+				id: validatedData.id,
+				title: validatedData.title,
+				slug,
+				content: validatedData.content,
+				categoryId: validatedData.categoryId,
+			});
 			this.debug.info("Post updated successfully", { ...updatedPost });
 
 			this.debug.finish("Post update completed successfully", { ...updatedPost });

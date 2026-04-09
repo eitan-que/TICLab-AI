@@ -289,6 +289,8 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             const postsData = await db.query.post.findMany({
                 where: {
                     ...(validatedQuery.title ? { title: { like: `%${validatedQuery.title}%` } } : {}),
+                    ...(validatedQuery.categoryId ? { categoryId: { eq: validatedQuery.categoryId } } : {}),
+                    ...(validatedQuery.authorId ? { authorId: { eq: validatedQuery.authorId } } : {}),
                 },
                 offset: (validatedQuery.page - 1) * validatedQuery.limit,
                 limit: validatedQuery.limit,
