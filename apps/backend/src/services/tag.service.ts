@@ -26,28 +26,39 @@ export class TagService extends Debuggable {
     }
 
     /**
-     * ## Create Tag
-     * Creates a new tag in the system.
-     * Validates the input data and associates the tag with the creating user.
+     * ## Create Tag (find-or-create)
+     * Creates a new tag, or returns the existing tag if one with the same name already exists.
+     * Tags function like hashtags — they are global and shared across all users and posts.
+     * Any authenticated user can create a tag. If a tag with the exact same name is found,
+     * that tag is returned instead of creating a duplicate.
      * @param data - The input data for creating a tag, conforming to CreateTagInput.
-     * @param createdById - The ID of the user creating the tag.
-     * @returns A promise that resolves to the created Tag object.
+     * @param createdById - The ID of the authenticated user creating the tag.
+     * @returns A promise that resolves to the existing or newly created Tag object.
      * @throws {ValidationError} If the input data does not meet the validation criteria.
      * @throws {AppError} If an unexpected error occurs during creation.
      * @example
      * ```ts
+     * // Returns existing tag if "typescript" already exists, otherwise creates it
      * const tag = await tagService.create({ name: "typescript" }, "user-id-123");
      * ```
      */
     async create(data: CreateTagInput, createdById: string): Promise<Tag> {
         try {
-            this.debug.start("Creating tag");
+            this.debug.start("Creating tag (find-or-create)");
 
             this.debug.step("Validating input data", { ...data });
             const validatedData = createTagInputSchema.parse(data);
             this.debug.info("Input data validated successfully", { ...validatedData });
 
-            this.debug.step("Creating tag in repository");
+            this.debug.step("Checking if tag with same name already exists", { name: validatedData.name });
+            const existing = await this.repository.getTagByName(validatedData.name);
+            if (existing && !existing.deletedAt) {
+                this.debug.info("Existing active tag found, returning it", { tagId: existing.id });
+                this.debug.finish("Tag find-or-create completed (found existing)");
+                return existing;
+            }
+
+            this.debug.step("No existing tag found, creating new tag");
             const created = await this.repository.createTag({
                 name: validatedData.name,
                 createdBy: createdById,

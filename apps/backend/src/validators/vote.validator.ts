@@ -37,7 +37,12 @@ export type VoteCommentId = z.infer<typeof voteCommentId>;
 
 /**
  * createVoteSchema: Repository-level schema for creating a vote.
- * Either postId or commentId must be provided (enforced in service layer).
+ * - value: Required, true for upvote, false for downvote.
+ * - userId: Required, must be a valid UUID identifying the voter.
+ * - postId: Required (nullable), must be a valid UUID if targeting a post.
+ * - commentId: Required (nullable), must be a valid UUID if targeting a comment.
+ * Exactly one of postId or commentId must be non-null — enforced in the service layer.
+ * Used only for server-side operations (repository layer).
  */
 export const createVoteSchema = z.object({
     value: voteValue,
@@ -52,7 +57,12 @@ export type CreateVote = z.infer<typeof createVoteSchema>;
 
 /**
  * createVoteInputSchema: User-facing schema for casting a vote.
- * userId is excluded — provided by the controller from the session.
+ * - value: Required, true for upvote, false for downvote.
+ * - postId: Required (nullable), must be a valid UUID if targeting a post.
+ * - commentId: Required (nullable), must be a valid UUID if targeting a comment.
+ * Exactly one of postId or commentId must be non-null — enforced in the service layer.
+ * userId is excluded — it is injected by the controller from the authenticated session.
+ * Used only for user input.
  */
 export const createVoteInputSchema = z.object({
     value: voteValue,

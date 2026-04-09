@@ -23,6 +23,17 @@ export interface VoteRepositoryTemplate {
     deleteVote(id: VoteId): Promise<void>;
 }
 
+/**
+ * # VoteRepository
+ * The VoteRepository class is responsible for managing all database operations related to the Vote entity.
+ * Votes are cast by authenticated users on posts or comments (never both simultaneously).
+ * Each user may cast at most one vote per post and one vote per comment — duplicate prevention is enforced at the service layer.
+ * It provides methods for creating, retrieving by various criteria, and deleting votes.
+ * Note: votes are not soft-deleted; deletion is permanent.
+ * Each method includes validation of input data using Zod schemas and detailed error handling with custom error classes.
+ * The repository integrates with the Debug class to provide step-by-step logging for troubleshooting and monitoring.
+ * @see Vote for the domain model that this repository manages.
+ */
 export class VoteRepository extends Debuggable implements VoteRepositoryTemplate {
 
     private mapToVote(row: typeof vote.$inferSelect): Vote {
@@ -37,6 +48,18 @@ export class VoteRepository extends Debuggable implements VoteRepositoryTemplate
         );
     }
 
+    /**
+     * ## Create Vote
+     * Inserts a new vote into the database.
+     * @param data - The data for the new vote, conforming to the CreateVote schema.
+     * @returns A promise that resolves to the newly created Vote domain object.
+     * @throws {ValidationError} If the input data fails schema validation.
+     * @throws {AppError} If the insert returns no rows or an unexpected error occurs.
+     * @example
+     * ```ts
+     * const vote = await voteRepository.createVote({ value: true, userId: "user-id-123", postId: "post-id-456", commentId: null });
+     * ```
+     */
     async createVote(data: CreateVote): Promise<Vote> {
         try {
             this.debug.start("Creating new vote");
@@ -71,6 +94,18 @@ export class VoteRepository extends Debuggable implements VoteRepositoryTemplate
         }
     }
 
+    /**
+     * ## Get Vote by ID
+     * Retrieves a single vote by its unique identifier.
+     * @param id - The UUID of the vote to retrieve.
+     * @returns A promise that resolves to the Vote domain object, or null if not found.
+     * @throws {ValidationError} If the provided ID fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const vote = await voteRepository.getVoteById("vote-id-123");
+     * ```
+     */
     async getVoteById(id: VoteId): Promise<Vote | null> {
         try {
             this.debug.start("Getting vote by ID");
@@ -100,6 +135,18 @@ export class VoteRepository extends Debuggable implements VoteRepositoryTemplate
         }
     }
 
+    /**
+     * ## Get Votes by Post ID
+     * Retrieves all votes cast on a specific post.
+     * @param postId - The UUID of the post whose votes should be retrieved, or null.
+     * @returns A promise that resolves to an array of Vote domain objects for the post.
+     * @throws {ValidationError} If the provided postId fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const votes = await voteRepository.getVotesByPostId("post-id-123");
+     * ```
+     */
     async getVotesByPostId(postId: VotePostId): Promise<Vote[]> {
         try {
             this.debug.start("Getting votes by post ID");
@@ -126,6 +173,18 @@ export class VoteRepository extends Debuggable implements VoteRepositoryTemplate
         }
     }
 
+    /**
+     * ## Get Votes by Comment ID
+     * Retrieves all votes cast on a specific comment.
+     * @param commentId - The UUID of the comment whose votes should be retrieved, or null.
+     * @returns A promise that resolves to an array of Vote domain objects for the comment.
+     * @throws {ValidationError} If the provided commentId fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const votes = await voteRepository.getVotesByCommentId("comment-id-123");
+     * ```
+     */
     async getVotesByCommentId(commentId: VoteCommentId): Promise<Vote[]> {
         try {
             this.debug.start("Getting votes by comment ID");
@@ -152,6 +211,20 @@ export class VoteRepository extends Debuggable implements VoteRepositoryTemplate
         }
     }
 
+    /**
+     * ## Get Vote by User and Post
+     * Checks whether a specific user has already voted on a specific post.
+     * Used by the service layer to prevent duplicate votes.
+     * @param userId - The UUID of the user.
+     * @param postId - The UUID of the post.
+     * @returns A promise that resolves to the existing Vote, or null if the user has not voted on this post.
+     * @throws {ValidationError} If the userId fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const existing = await voteRepository.getVoteByUserAndPost("user-id-123", "post-id-456");
+     * ```
+     */
     async getVoteByUserAndPost(userId: VoteUserId, postId: string): Promise<Vote | null> {
         try {
             this.debug.start("Getting vote by user and post");
@@ -176,6 +249,20 @@ export class VoteRepository extends Debuggable implements VoteRepositoryTemplate
         }
     }
 
+    /**
+     * ## Get Vote by User and Comment
+     * Checks whether a specific user has already voted on a specific comment.
+     * Used by the service layer to prevent duplicate votes.
+     * @param userId - The UUID of the user.
+     * @param commentId - The UUID of the comment.
+     * @returns A promise that resolves to the existing Vote, or null if the user has not voted on this comment.
+     * @throws {ValidationError} If the userId fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const existing = await voteRepository.getVoteByUserAndComment("user-id-123", "comment-id-456");
+     * ```
+     */
     async getVoteByUserAndComment(userId: VoteUserId, commentId: string): Promise<Vote | null> {
         try {
             this.debug.start("Getting vote by user and comment");
@@ -200,6 +287,18 @@ export class VoteRepository extends Debuggable implements VoteRepositoryTemplate
         }
     }
 
+    /**
+     * ## Delete Vote
+     * Permanently removes a vote from the database. Votes are not soft-deleted.
+     * @param id - The UUID of the vote to permanently delete.
+     * @returns A promise that resolves when the vote has been deleted.
+     * @throws {ValidationError} If the provided ID fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during deletion.
+     * @example
+     * ```ts
+     * await voteRepository.deleteVote("vote-id-123");
+     * ```
+     */
     async deleteVote(id: VoteId): Promise<void> {
         try {
             this.debug.start("Deleting vote");

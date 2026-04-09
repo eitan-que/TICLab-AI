@@ -23,6 +23,14 @@ export interface CommentRepositoryTemplate {
     hardDeleteComment(id: CommentId): Promise<void>;
 }
 
+/**
+ * # CommentRepository
+ * The CommentRepository class is responsible for managing all database operations related to the Comment entity.
+ * It provides methods for creating, retrieving, updating, soft-deleting, restoring, and hard-deleting comments.
+ * Each method includes validation of input data using Zod schemas and detailed error handling with custom error classes.
+ * The repository integrates with the Debug class to provide step-by-step logging for troubleshooting and monitoring.
+ * @see Comment for the domain model that this repository manages.
+ */
 export class CommentRepository extends Debuggable implements CommentRepositoryTemplate {
 
     private mapToComment(row: typeof comment.$inferSelect): Comment {
@@ -38,6 +46,22 @@ export class CommentRepository extends Debuggable implements CommentRepositoryTe
         );
     }
 
+    /**
+     * ## Create Comment
+     * Inserts a new comment into the database.
+     * @param data - The data for the new comment, conforming to the CreateComment schema.
+     * @returns A promise that resolves to the newly created Comment domain object.
+     * @throws {ValidationError} If the input data fails schema validation.
+     * @throws {AppError} If the insert returns no rows or an unexpected error occurs.
+     * @example
+     * ```ts
+     * const comment = await commentRepository.createComment({
+     *   content: "Great post!",
+     *   authorId: "user-id-123",
+     *   postId: "post-id-456",
+     * });
+     * ```
+     */
     async createComment(data: CreateComment): Promise<Comment> {
         try {
             this.debug.start("Creating new comment");
@@ -73,6 +97,18 @@ export class CommentRepository extends Debuggable implements CommentRepositoryTe
         }
     }
 
+    /**
+     * ## Get Comment by ID
+     * Retrieves a single comment by its unique identifier.
+     * @param id - The UUID of the comment to retrieve.
+     * @returns A promise that resolves to the Comment domain object, or null if not found.
+     * @throws {ValidationError} If the provided ID fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const comment = await commentRepository.getCommentById("comment-id-123");
+     * ```
+     */
     async getCommentById(id: CommentId): Promise<Comment | null> {
         try {
             this.debug.start("Getting comment by ID");
@@ -107,6 +143,18 @@ export class CommentRepository extends Debuggable implements CommentRepositoryTe
         }
     }
 
+    /**
+     * ## Get All Comments
+     * Retrieves a paginated list of comments, optionally filtered by post.
+     * @param query - The query parameters conforming to the GetAllComments schema.
+     * @returns A promise that resolves to an array of Comment domain objects.
+     * @throws {ValidationError} If the query parameters fail schema validation.
+     * @throws {AppError} If an unexpected error occurs during retrieval.
+     * @example
+     * ```ts
+     * const comments = await commentRepository.getAllComments({ postId: "post-id-123", page: 1, limit: 10 });
+     * ```
+     */
     async getAllComments(query: GetAllComments): Promise<Comment[]> {
         try {
             this.debug.start("Getting all comments");
@@ -137,6 +185,18 @@ export class CommentRepository extends Debuggable implements CommentRepositoryTe
         }
     }
 
+    /**
+     * ## Update Comment
+     * Updates an existing comment's content in the database.
+     * @param data - The update payload conforming to the UpdateComment schema, including the comment ID.
+     * @returns A promise that resolves to the updated Comment domain object.
+     * @throws {ValidationError} If the input data fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during the update.
+     * @example
+     * ```ts
+     * const updated = await commentRepository.updateComment({ id: "comment-id-123", content: "Updated text." });
+     * ```
+     */
     async updateComment(data: UpdateComment): Promise<Comment> {
         try {
             this.debug.start("Updating comment");
@@ -164,6 +224,18 @@ export class CommentRepository extends Debuggable implements CommentRepositoryTe
         }
     }
 
+    /**
+     * ## Delete Comment
+     * Soft-deletes a comment by setting its deletedAt timestamp and recording who deleted it.
+     * @param data - The delete payload conforming to the DeleteComment schema, including the comment ID and deletedBy user ID.
+     * @returns A promise that resolves when the comment has been soft-deleted.
+     * @throws {ValidationError} If the input data fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during deletion.
+     * @example
+     * ```ts
+     * await commentRepository.deleteComment({ id: "comment-id-123", deletedBy: "user-id-456" });
+     * ```
+     */
     async deleteComment(data: DeleteComment): Promise<void> {
         try {
             this.debug.start("Deleting comment");
@@ -191,6 +263,18 @@ export class CommentRepository extends Debuggable implements CommentRepositoryTe
         }
     }
 
+    /**
+     * ## Restore Comment
+     * Restores a soft-deleted comment by clearing its deletedAt and deletedBy fields.
+     * @param id - The UUID of the comment to restore.
+     * @returns A promise that resolves when the comment has been restored.
+     * @throws {ValidationError} If the provided ID fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during restoration.
+     * @example
+     * ```ts
+     * await commentRepository.restoreComment("comment-id-123");
+     * ```
+     */
     async restoreComment(id: CommentId): Promise<void> {
         try {
             this.debug.start("Restoring comment");
@@ -218,6 +302,18 @@ export class CommentRepository extends Debuggable implements CommentRepositoryTe
         }
     }
 
+    /**
+     * ## Hard Delete Comment
+     * Permanently removes a comment from the database. This operation is irreversible.
+     * @param id - The UUID of the comment to permanently delete.
+     * @returns A promise that resolves when the comment has been permanently deleted.
+     * @throws {ValidationError} If the provided ID fails schema validation.
+     * @throws {AppError} If an unexpected error occurs during hard deletion.
+     * @example
+     * ```ts
+     * await commentRepository.hardDeleteComment("comment-id-123");
+     * ```
+     */
     async hardDeleteComment(id: CommentId): Promise<void> {
         try {
             this.debug.start("Hard deleting comment");

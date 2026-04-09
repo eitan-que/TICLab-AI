@@ -41,6 +41,10 @@ export type CommentDeletedBy = z.infer<typeof commentDeletedBy>;
 
 /**
  * createCommentSchema: Repository-level schema for creating a comment.
+ * - content: Required, validated by commentContent schema.
+ * - authorId: Required, must be a valid UUID or null for anonymous comments.
+ * - postId: Required, must be a valid UUID identifying the parent post.
+ * Used only for server-side operations (repository layer).
  */
 export const createCommentSchema = z.object({
     content: commentContent,
@@ -54,7 +58,10 @@ export type CreateComment = z.infer<typeof createCommentSchema>;
 
 /**
  * createCommentInputSchema: User-facing schema for creating a comment.
- * authorId is excluded — provided by the controller from the session.
+ * - content: Required, validated by commentContent schema.
+ * - postId: Required, must be a valid UUID identifying the parent post.
+ * authorId is excluded — it is injected by the controller from the authenticated session.
+ * Used only for user input.
  */
 export const createCommentInputSchema = z.object({
     content: commentContent,
@@ -67,6 +74,9 @@ export type CreateCommentInput = z.infer<typeof createCommentInputSchema>;
 
 /**
  * updateCommentSchema: Repository-level schema for updating a comment.
+ * - id: Required, must be a valid UUID identifying the comment to update.
+ * - content: Optional, validated by commentContent schema if provided.
+ * Used only for server-side operations (repository layer).
  */
 export const updateCommentSchema = z.object({
     id: commentId,
@@ -79,6 +89,9 @@ export type UpdateComment = z.infer<typeof updateCommentSchema>;
 
 /**
  * updateCommentInputSchema: User-facing schema for updating a comment.
+ * - id: Required, must be a valid UUID identifying the comment to update.
+ * - content: Optional, validated by commentContent schema if provided.
+ * Used only for user input.
  */
 export const updateCommentInputSchema = z.object({
     id: commentId,
@@ -90,7 +103,11 @@ export const updateCommentInputSchema = z.object({
 export type UpdateCommentInput = z.infer<typeof updateCommentInputSchema>;
 
 /**
- * getAllCommentsSchema: Schema for querying a list of comments.
+ * getAllCommentsSchema: Schema for querying a paginated list of comments.
+ * - page: Optional, must be a positive integer, defaults to 1.
+ * - limit: Optional, must be a positive integer between 1 and 100, defaults to 10.
+ * - postId: Optional, filters comments to those belonging to the specified post.
+ * Used for validating incoming query parameters when listing comments.
  */
 export const getAllCommentsSchema = z.object({
     page: z.number({ error: "GET_COMMENTS_PAGE_INVALID" }).int().positive().default(1),
@@ -104,6 +121,9 @@ export type GetAllComments = z.infer<typeof getAllCommentsSchema>;
 
 /**
  * deleteCommentSchema: Repository-level schema for soft-deleting a comment.
+ * - id: Required, must be a valid UUID identifying the comment to delete.
+ * - deletedBy: Required, must be a valid UUID identifying who performed the deletion, or null.
+ * Used only for server-side operations (repository layer).
  */
 export const deleteCommentSchema = z.object({
     id: commentId,
