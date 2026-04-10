@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Full Stack (Turbo)",
+      "runtimeExecutable": "/Users/eitan/.bun/bin/bun",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "Backend (Elysia)",
+      "runtimeExecutable": "/Users/eitan/.bun/bin/bun",
+      "runtimeArgs": ["run", "--watch", "apps/backend/src/index.ts"],
+      "port": 3000
+    },
+    {
+      "name": "Frontend (Next.js)",
+      "runtimeExecutable": "/Users/eitan/.bun/bin/bun",
+      "runtimeArgs": ["--cwd", "apps/web", "run", "dev"],
+      "port": 3001
+    }
+  ]
+}

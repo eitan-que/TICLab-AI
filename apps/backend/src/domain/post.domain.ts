@@ -10,11 +10,34 @@ type PostJSONFields = {
     published?: boolean;
     authorId?: boolean;
     categoryId?: boolean;
+    deletedBy?: boolean;
     createdAt?: boolean;
     updatedAt?: boolean;
     deletedAt?: boolean;
 };
 
+/**
+ * Post represents a post entity in the system.
+ * It encapsulates all properties and behaviors related to a post, including validation logic.
+ * The constructor and setters ensure that any instance of Post is always in a valid state according to the defined schemas.
+ *
+ * @example
+ * ```ts
+ * const post = new Post(
+ *   "123",
+ *   "my-post-ab12",
+ *   "My Post",
+ *   "# Hello World",
+ *   true,
+ *   "user-456",
+ *   "category-789",
+ *   null,
+ *   new Date(),
+ *   new Date(),
+ *   null
+ * );
+ * ```
+ */
 export class Post {
     constructor(
         private _id: string,
@@ -24,6 +47,7 @@ export class Post {
         private _published: boolean,
         private _authorId: string | null,
         private _categoryId: string,
+        private _deletedBy: string | null,
         private _createdAt: Date,
         private _updatedAt: Date,
         private _deletedAt: Date | null,
@@ -60,7 +84,7 @@ export class Post {
     // Getters
 
     /**
-     * ## Id
+     * ## ID
      * ### Getter
      * The unique identifier for the post.
      * This is a read-only property that is set at construction time and cannot be changed afterwards.
@@ -72,8 +96,8 @@ export class Post {
     /**
      * ## Slug
      * ### Getter
-     * The slug of the post. This is a required field that must be unique and follow a specific format.
-     * The setter for this property includes validation logic to ensure that any assigned value adheres to the defined schema.
+     * The URL-friendly identifier for the post. Automatically regenerated when the title is updated.
+     * This is a read-only property externally; it is managed internally via the private slug setter.
      */
     get slug(): string {
         return this._slug;
@@ -82,8 +106,8 @@ export class Post {
     /**
      * ## Title
      * ### Getter
-     * The title of the post. This is a required field that must meet specific validation criteria defined in the postTitle schema.
-     * The setter for this property includes validation logic to ensure that any assigned value adheres to the defined schema.
+     * The title of the post. Must be between 1 and 255 characters, trimmed of whitespace.
+     * Updating the title via the setter will also regenerate the slug.
      */
     get title(): string {
         return this._title;
@@ -92,8 +116,8 @@ export class Post {
     /**
      * ## Content
      * ### Getter
-     * The content of the post. This is a required field that must meet specific validation criteria defined in the postContent schema.
-     * The setter for this property includes validation logic to ensure that any assigned value adheres to the defined schema.
+     * The main body of the post in Markdown format.
+     * Must be at least 1 character and must be valid Markdown with balanced fenced code blocks.
      */
     get content(): string {
         return this._content;
@@ -102,37 +126,44 @@ export class Post {
     /**
      * ## Published
      * ### Getter
-     * Indicates whether the post is published or not. This is a boolean value that can be set to true or false.
-     * The setter for this property can include additional logic to handle state changes related to publishing, such as setting the published date or triggering notifications.
+     * Whether the post is publicly visible. Unpublished posts are hidden from public queries.
      */
     get published(): boolean {
         return this._published;
     }
 
     /**
-     * ## AuthorId
+     * ## Author ID
      * ### Getter
-     * The unique identifier of the author who created the post. This is an optional field that can be null if the post does not have an associated author.
-     * The setter for this property can include validation logic to ensure that any assigned value corresponds to a valid user in the system.
+     * The ID of the user who authored the post. Can be null for anonymous or system-generated posts.
      */
     get authorId(): string | null {
         return this._authorId;
     }
 
     /**
-     * ## CategoryId
+     * ## Category ID
      * ### Getter
-     * The unique identifier of the category to which the post belongs. This is a required field that must correspond to a valid category in the system.
-     * The setter for this property can include validation logic to ensure that any assigned value corresponds to a valid category in the system.
+     * The ID of the category this post belongs to. This is a required field.
      */
     get categoryId(): string {
         return this._categoryId;
     }
 
     /**
-     * ## CreatedAt
+     * ## Deleted By
      * ### Getter
-     * The date and time when the post was created. 
+     * The ID of the user who soft-deleted this post.
+     * null if the post has not been deleted or was deleted before this field was added.
+     */
+    get deletedBy(): string | null {
+        return this._deletedBy;
+    }
+
+    /**
+     * ## Created At
+     * ### Getter
+     * The timestamp when the post was created.
      * This is a read-only property that is set at construction time and cannot be changed afterwards.
      */
     get createdAt(): Date {
@@ -140,20 +171,20 @@ export class Post {
     }
 
     /**
-     * ## UpdatedAt
+     * ## Updated At
      * ### Getter
-     * The date and time when the post was last updated. 
-     * This is a read-only property that is updated automatically whenever the post is modified.
+     * The timestamp when the post was last updated.
+     * This is a read-only property externally; it is managed internally via the private updatedAt setter.
      */
     get updatedAt(): Date {
         return this._updatedAt;
     }
 
     /**
-     * ## DeletedAt
+     * ## Deleted At
      * ### Getter
-     * The date and time when the post was deleted. 
-     * This is an optional field that can be null if the post has not been deleted.
+     * The timestamp when the post was soft-deleted, or null if the post is active.
+     * This is a read-only property externally; it is managed internally via the private deletedAt setter.
      */
     get deletedAt(): Date | null {
         return this._deletedAt;
@@ -163,13 +194,13 @@ export class Post {
 
     /**
      * ### Setter
-     * This setter includes validation logic to ensure that any assigned value adheres to the defined schema.
-     * When the title is updated, the slug is automatically generated from the title and also validated.
-     * If the validation fails, a ValidationError is thrown with details about the specific validation issues.
-     * If an unexpected error occurs during validation, an AppError is thrown with details about the error.
+     * This setter includes validation logic to ensure the assigned value adheres to the postTitle schema.
+     * When the title is updated, the slug is automatically regenerated from the new title and also validated.
+     * If validation fails, a ValidationError is thrown with details about the specific issues.
+     * If an unexpected error occurs during validation, an AppError is thrown.
      * @example
      * ```ts
-     * post.title = "New Post Title";
+     * post.title = "Updated Post Title";
      * ```
      * @throws {ValidationError} If the provided title does not meet the validation criteria defined in the postTitle schema.
      * @throws {AppError} If an unexpected error occurs during validation.
@@ -190,12 +221,11 @@ export class Post {
 
     /**
      * ### Private Setter
-     * This setter includes validation logic to ensure that any assigned value adheres to the defined schema.
-     * If the validation fails, a ValidationError is thrown with details about the specific validation issues.
-     * If an unexpected error occurs during validation, an AppError is thrown with details about the error.
+     * Validates and assigns the slug. Called internally when the title is updated.
+     * If validation fails, a ValidationError is thrown with details about the specific issues.
      * @example
      * ```ts
-     * this.slug = "new-post-slug";
+     * this.slug = "updated-post-title-ab12";
      * ```
      * @throws {ValidationError} If the provided slug does not meet the validation criteria defined in the postSlug schema.
      * @throws {AppError} If an unexpected error occurs during validation.
@@ -228,7 +258,7 @@ export class Post {
 
     /**
      * ### Private Setter
-     * This setter is used to set the deletedAt timestamp when the post is deleted.
+     * This setter is used to set the deletedAt timestamp when the post is soft-deleted or restored.
      * It is a private setter to ensure that the deletedAt timestamp can only be modified internally by the class methods, maintaining data integrity.
      * @example
      * ```ts
@@ -239,18 +269,29 @@ export class Post {
         this._deletedAt = date;
     }
 
-    // Methods
-    
     /**
-     * ### Static Method
-     * This method generates a slug from the given post title by converting it to lowercase, replacing non-alphanumeric characters with hyphens, and trimming leading/trailing hyphens.
-     * The generated slug is then validated against the postSlug schema to ensure it meets the required format.
-     * If the validation fails, a ValidationError is thrown with details about the specific validation issues.
-     * If an unexpected error occurs during validation, an AppError is thrown with details about the error.
+     * ### Private Setter
+     * This setter records which user performed the soft-deletion. Set to null on restore.
+     * It is a private setter to ensure that the deletedBy field can only be modified internally by the class methods, maintaining data integrity.
      * @example
      * ```ts
-     * const slug = this.slugifyTitle("Example Post Title");
-     * // slug would be "example-post-title-1a2b" (the random suffix will vary)
+     * this.deletedBy = "user-id-123";
+     * ```
+     */
+    private set deletedBy(userId: string | null) {
+        this._deletedBy = userId;
+    }
+
+    // Methods
+
+    /**
+     * ### Static Method
+     * Generates a URL-friendly slug from the given post title by converting it to lowercase,
+     * replacing non-alphanumeric characters with hyphens, and appending a random 4-character suffix.
+     * @example
+     * ```ts
+     * const slug = Post.slugifyTitle("My Post Title");
+     * // slug would be "my-post-title-1a2b" (the random suffix will vary)
      * ```
      * @throws {ValidationError} If the generated slug does not meet the validation criteria defined in the postSlug schema.
      * @throws {AppError} If an unexpected error occurs during validation.
@@ -279,23 +320,26 @@ export class Post {
     /**
      * ## Delete
      * ### Public Method
-     * This method marks the post as deleted by setting the deletedAt timestamp to the current date and time.
+     * This method soft-deletes the post by setting the deletedAt timestamp to the current date and time,
+     * and records which user performed the deletion in the deletedBy field.
      * It also updates the updatedAt timestamp to reflect the modification.
      * After calling this method, the post is considered deleted and should not be returned in active post queries.
+     * @param deletedById - The ID of the user performing the deletion.
      * @example
      * ```ts
-     * post.delete();
+     * post.delete("user-id-123");
      * ```
      */
-    public delete() {
+    public delete(deletedById: string) {
         this.deletedAt = new Date();
+        this.deletedBy = deletedById;
         this.updateTimestamps();
     }
 
     /**
      * ## Restore
      * ### Public Method
-     * This method restores a previously deleted post by setting the deletedAt timestamp back to null.
+     * This method restores a previously soft-deleted post by setting the deletedAt and deletedBy fields back to null.
      * It also updates the updatedAt timestamp to reflect the modification.
      * After calling this method, the post is considered active again and should be returned in active post queries.
      * @example
@@ -305,20 +349,21 @@ export class Post {
      */
     public restore() {
         this.deletedAt = null;
+        this.deletedBy = null;
         this.updateTimestamps();
     }
 
     /**
      * ## toJSON
      * ### Public Method
-     * This method converts the Post instance into a JSON object. 
+     * This method converts the Post instance into a plain JSON object.
      * It accepts an optional parameter `fields` which allows you to specify which properties to include in the output.
      * If `fields` is not provided, all properties will be included in the output.
      * This method is useful for controlling the serialization of the Post instance, especially when sending data to clients or APIs.
      * @example
      * ```ts
-     * const json = post.toJSON({ id: true, title: true });
-     * // json would be { id: "123", title: "Example Post" }
+     * const json = post.toJSON({ id: true, title: true, slug: true });
+     * // json would be { id: "123", title: "My Post", slug: "my-post-ab12" }
      * ```
      */
     public toJSON(fields?: PostJSONFields) {
@@ -330,6 +375,7 @@ export class Post {
             published: this.published,
             authorId: this.authorId,
             categoryId: this.categoryId,
+            deletedBy: this.deletedBy,
             createdAt: this.createdAt.toISOString(),
             updatedAt: this.updatedAt.toISOString(),
             deletedAt: this.deletedAt ? this.deletedAt.toISOString() : null,

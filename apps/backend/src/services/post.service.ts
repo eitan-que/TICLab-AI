@@ -1,11 +1,17 @@
 import { Post } from "@/domain/post.domain";
 import { Debuggable } from "@/lib/debug";
-import { AppError, ConflictError, NotFoundError, ParseZodError } from "@/lib/errors";
+import { AppError, ConflictError, ForbiddenError, NotFoundError, ParseZodError } from "@/lib/errors";
 import { postRepository, PostRepositoryTemplate } from "@/repositories/post.repository";
 import { createPostInputSchema, CreatePostInput, getAllPostsSchema, GetAllPosts, postId, PostId, postSlug, PostSlug, updatePostInputSchema, UpdatePostInput } from "@/validators/post.validator";
 import { ZodError } from "zod";
 import { categoryService } from "@/services/category.service";
 
+/**
+ * PostService handles all business logic related to posts.
+ * It validates inputs, enforces authorization rules, and delegates persistence to the repository.
+ * All methods throw typed errors (ValidationError, NotFoundError, ConflictError, ForbiddenError, AppError)
+ * to allow consistent error handling at the controller layer.
+ */
 export class PostService extends Debuggable {
 	constructor(
 		private repository: PostRepositoryTemplate
@@ -222,7 +228,13 @@ export class PostService extends Debuggable {
 	 * It validates the query parameters using the getAllPostsSchema, and if the validation fails, it throws a ValidationError with details about the specific validation issues.
 	 * If the validation succeeds, it calls the repository's getAllPosts method to fetch the posts from the database based on the query parameters.
 	 * If an unexpected error occurs during validation or retrieval, it throws an AppError with details about the error.
+	 * Supports filtering by `title` (partial match), `categoryId`, and `authorId`.
 	 * @param query - The query parameters for retrieving posts, which should conform to the GetAllPosts type.
+	 * @param query.page - The page number for pagination (defaults to 1).
+	 * @param query.limit - The number of posts per page, between 1 and 100 (defaults to 10).
+	 * @param query.title - Optional title substring to filter posts by.
+	 * @param query.categoryId - Optional UUID to filter posts by category.
+	 * @param query.authorId - Optional UUID to filter posts by author.
 	 * @returns A promise that resolves to an array of Post objects that match the query parameters.
 	 * @throws {ValidationError} If the provided query parameters do not meet the validation criteria defined in the getAllPostsSchema.
 	 * @throws {AppError} If an unexpected error occurs during validation or post retrieval.
@@ -309,8 +321,18 @@ export class PostService extends Debuggable {
             }
             this.debug.info("Post is not deleted, proceeding with update", { id: validatedData.id });
 
-			this.debug.step("Updating post in the repository", { ...validatedData });
-			const updatedPost = await this.repository.updatePost(validatedData);
+			this.debug.step("Generating slug from post title if title is provided", { title: validatedData.title });
+			const slug = validatedData.title ? Post.slugifyTitle(validatedData.title) : undefined;
+			this.debug.info("Slug generation step completed", { slug });
+
+			this.debug.step("Updating post in the repository", { ...validatedData, slug });
+			const updatedPost = await this.repository.updatePost({
+				id: validatedData.id,
+				title: validatedData.title,
+				slug,
+				content: validatedData.content,
+				categoryId: validatedData.categoryId,
+			});
 			this.debug.info("Post updated successfully", { ...updatedPost });
 
 			this.debug.finish("Post update completed successfully", { ...updatedPost });
@@ -341,9 +363,9 @@ export class PostService extends Debuggable {
 	 * @throws {NotFoundError} If the post to be deleted does not exist.
 	 * @throws {AppError} If an unexpected error occurs during validation or post deletion.
 	 */
-	async delete(id: PostId): Promise<Post> {
+	async delete(id: PostId, deletedById: string): Promise<Post> {
 		try {
-			this.debug.start("Deleting post", { id });
+			this.debug.start("Deleting post", { id, deletedById });
 
 			this.debug.step("Validating post ID", { id });
 			const validatedId = postId.parse(id);
@@ -360,12 +382,12 @@ export class PostService extends Debuggable {
 			}
 			this.debug.info("Post is not deleted, proceeding with deletion", { id: validatedId });
 
-			this.debug.step("Deleting post in the repository", { id: validatedId });
-			await this.repository.deletePost(validatedId);
+			this.debug.step("Deleting post in the repository", { id: validatedId, deletedById });
+			await this.repository.deletePost({ id: validatedId, deletedBy: deletedById });
 			this.debug.info("Post deleted successfully", { id: validatedId });
 
 			this.debug.step("Marking post as deleted in the domain model", { id: validatedId });
-			existingPost.delete();
+			existingPost.delete(deletedById);
 			this.debug.info("Post marked as deleted in the domain model", { existingPost });
 
 			this.debug.finish("Post deletion completed successfully", { existingPost });
@@ -385,22 +407,26 @@ export class PostService extends Debuggable {
 
 	/**
 	 * ## Restore Post
-	 * This method restores a previously deleted post based on its unique identifier (ID).
-	 * It validates the provided ID using the postId schema, and if the validation fails, it throws a ValidationError with details about the specific validation issues.
-	 * If the validation succeeds, it checks if the post exists by calling the getById method. If the post does not exist, it throws a NotFoundError.
-	 * If the post exists but is not marked as deleted, it throws a ConflictError indicating that the post cannot be restored because it is not deleted.
-	 * If the post exists and is marked as deleted, it calls the repository's restorePost method to restore the post in the database.
-	 * If an unexpected error occurs during validation or restoration, it throws an AppError with details about the error.
-	 * @param id - The unique identifier of the post to restore, which should conform to the PostId type.
+	 * Restores a previously soft-deleted post.
+	 * Validates the post ID, confirms the post exists and is marked as deleted, then enforces restore authorization:
+	 * only the user who deleted it or an ADMIN/MODERATOR can restore it.
+	 * @param id - The unique identifier of the post to restore, conforming to the PostId type.
+	 * @param requesterId - The ID of the user attempting the restore.
+	 * @param requesterRole - The role of the user attempting the restore.
 	 * @returns A promise that resolves to the restored Post object.
-	 * @throws {ValidationError} If the provided ID does not meet the validation criteria defined in the postId schema.
-	 * @throws {NotFoundError} If the post to be restored does not exist.
-	 * @throws {ConflictError} If the post is not marked as deleted and therefore cannot be restored.
-	 * @throws {AppError} If an unexpected error occurs during validation or post restoration.
+	 * @throws {ValidationError} If the provided ID does not meet the validation criteria.
+	 * @throws {NotFoundError} If the post does not exist.
+	 * @throws {ConflictError} If the post is not marked as deleted.
+	 * @throws {ForbiddenError} If the post was deleted by an admin/mod and the requester is the author.
+	 * @throws {AppError} If an unexpected error occurs during restoration.
+	 * @example
+	 * ```ts
+	 * const restored = await postService.restore("post-id-123", "user-id-456", "AUTHOR");
+	 * ```
 	 */
-	async restore(id: PostId): Promise<Post> {
+	async restore(id: PostId, requesterId: string, requesterRole: string): Promise<Post> {
 		try {
-			this.debug.start("Restoring post", { id });
+			this.debug.start("Restoring post", { id, requesterId, requesterRole });
 
 			this.debug.step("Validating post ID", { id });
 			const validatedId = postId.parse(id);
@@ -415,7 +441,17 @@ export class PostService extends Debuggable {
 				this.debug.warn("Post is not marked as deleted, cannot restore", { id: validatedId });
 				throw new ConflictError("Post is not deleted", { id: validatedId });
 			}
-			this.debug.info("Post is marked as deleted, proceeding with restoration", { id: validatedId });
+			this.debug.info("Post is marked as deleted, checking restore authorization", { id: validatedId });
+
+			const isAdminOrModerator = requesterRole === "ADMIN" || requesterRole === "MODERATOR";
+			const selfDeleted = existingPost.deletedBy === requesterId;
+
+			this.debug.step("Checking restore authorization", { isAdminOrModerator, selfDeleted, deletedBy: existingPost.deletedBy });
+			if (!isAdminOrModerator && !selfDeleted) {
+				this.debug.warn("Post was deleted by admin/mod, author cannot restore it", { id: validatedId });
+				throw new ForbiddenError("Cannot restore post deleted by an administrator or moderator", { id: validatedId });
+			}
+			this.debug.info("Restore authorization passed", { id: validatedId });
 
 			this.debug.step("Restoring post in the repository", { id: validatedId });
 			await this.repository.restorePost(validatedId);

@@ -1,5 +1,6 @@
 import z from "zod";
 import { Lexer } from "marked";
+import { tagName } from "@/validators/tag.validator";
 
 /**
  * This function checks if the given Markdown content has balanced fenced code blocks.
@@ -55,6 +56,25 @@ function hasBalancedFencedCodeBlocks(markdown: string): boolean {
     return openFence === null;
 }
 
+/**
+ * This function validates whether the given content is a well-formed Markdown string.
+ * It checks for null bytes (which would indicate binary content) and then verifies that
+ * all fenced code blocks are balanced using `hasBalancedFencedCodeBlocks`.
+ * Finally, it attempts to lex the content using the `marked` library's GFM lexer to
+ * confirm it can be parsed as valid GitHub Flavored Markdown.
+ * @param content The content string to validate as Markdown.
+ * @returns A boolean indicating whether the content is valid Markdown.
+ * @example
+ * ```ts
+ * const valid = isValidMarkdownFormat("# Hello\n\nThis is **bold**.");
+ * // valid would be true
+ * ```
+ * @example
+ * ```ts
+ * const valid = isValidMarkdownFormat("Hello\u0000World");
+ * // valid would be false (contains null byte)
+ * ```
+ */
 function isValidMarkdownFormat(content: string): boolean {
     if (/\u0000/.test(content)) {
         return false;
@@ -187,7 +207,6 @@ export type UpdatePost = z.infer<typeof updatePostSchema>;
  * GetAllPostsInput: The expected shape of the input when retrieving a list of posts.
  * - page: Optional, must be a positive integer, defaults to 1.
  * - limit: Optional, must be a positive integer between 1 and 100, defaults to 10.
- * - search: Optional, a string used for searching posts by title or content, max length 255.
  * - title: Optional, validated by postTitle schema if provided, used for filtering posts by title.
  * - categoryId: Optional, must be a valid UUID if provided, used for filtering posts by category.
  * - authorId: Optional, must be a valid UUID if provided, used for filtering posts by author.
@@ -207,13 +226,22 @@ export const getAllPostsSchema = z.object({
 export type GetAllPosts = z.infer<typeof getAllPostsSchema>;
 
 /**
+ * DeletedBy: A UUID string that identifies the user who deleted the post.
+ */
+export const deletedBy = z.uuid({ error: "POST_DELETED_BY_INVALID" }).nullable();
+
+export type DeletedBy = z.infer<typeof deletedBy>;
+
+/**
  * DeletePostInput: The expected shape of the input when deleting a post.
  * - id: Required, must be a valid UUID.
+ * - deletedBy: Required, must be a valid UUID identifying who deleted the post.
  * Used for validating incoming data when deleting a post.
  * Used only for server-side operations.
  */
 export const deletePostSchema = z.object({
     id: postId,
+    deletedBy: deletedBy,
 }, {
     error: "DELETE_POST_INPUT_INVALID"
 });
@@ -221,18 +249,32 @@ export const deletePostSchema = z.object({
 export type DeletePost = z.infer<typeof deletePostSchema>;
 
 /**
+ * PostTags: An optional list of tag names to associate with a post.
+ * Each name is validated by the tagName schema (1-100 chars, trimmed).
+ * Tags behave like hashtags — if a tag with the given name already exists it is reused,
+ * otherwise a new tag is created. When provided on update, the post's tags are fully replaced.
+ */
+export const postTags = z.array(tagName, { error: "POST_TAGS_INVALID" })
+    .max(20, { error: "POST_TAGS_TOO_MANY" })
+    .optional();
+
+export type PostTags = z.infer<typeof postTags>;
+
+/**
  * CreatePostInputSchema: A simplified schema for validating the input when creating a new post, specifically for user input.
  * - title: Required, validated by postTitle schema.
  * - content: Required, validated by postContent schema.
  * - categoryId: Required, must be a valid UUID.
- * Used for validating incoming data when creating a post, specifically for the title, content, and categoryId fields.
+ * - tags: Optional, an array of up to 20 tag names to associate with the post.
+ * Used for validating incoming data when creating a post, specifically for the title, content, categoryId, and tags fields.
  * Used only for user input.
  */
 export const createPostInputSchema = z.object({
     title: postTitle,
     content: postContent,
     authorId: authorId.nullable(),
-    categoryId: categoryId
+    categoryId: categoryId,
+    tags: postTags,
 }, {
     error: "CREATE_POST_INPUT_INVALID"
 });
@@ -245,7 +287,8 @@ export type CreatePostInput = z.infer<typeof createPostInputSchema>;
  * - title: Optional, validated by postTitle schema if provided.
  * - content: Optional, validated by postContent schema if provided.
  * - categoryId: Optional, must be a valid UUID if provided.
- * Used for validating incoming data when updating a post, specifically for the title, content, and categoryId fields.
+ * - tags: Optional, an array of up to 20 tag names. When provided, fully replaces the post's existing tags.
+ * Used for validating incoming data when updating a post, specifically for the title, content, categoryId, and tags fields.
  * Used only for user input.
  */
 export const updatePostInputSchema = z.object({
@@ -253,6 +296,7 @@ export const updatePostInputSchema = z.object({
     title: postTitle.optional(),
     content: postContent.optional(),
     categoryId: categoryId.optional(),
+    tags: postTags,
 }, {
     error: "UPDATE_POST_INPUT_INVALID"
 });

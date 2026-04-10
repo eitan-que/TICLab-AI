@@ -3,7 +3,7 @@ import { post } from "@/db/schema";
 import { Post } from "@/domain/post.domain";
 import { Debuggable } from "@/lib/debug";
 import { AppError, ParseZodError } from "@/lib/errors";
-import { CreatePost, createPostSchema, GetAllPosts, getAllPostsSchema, postId, PostId, postSlug, PostSlug, UpdatePost, updatePostSchema } from "@/validators/post.validator";
+import { CreatePost, createPostSchema, DeletePost, deletePostSchema, GetAllPosts, getAllPostsSchema, postId, PostId, postSlug, PostSlug, UpdatePost, updatePostSchema } from "@/validators/post.validator";
 import { eq, sql } from "drizzle-orm";
 import { ZodError } from "zod";
 
@@ -13,7 +13,7 @@ export interface PostRepositoryTemplate {
     getPostBySlug(slug: PostSlug): Promise<Post | null>;
     getAllPosts(query: GetAllPosts): Promise<Post[]>;
     updatePost(data: UpdatePost): Promise<Post>;
-    deletePost(id: PostId): Promise<void>;
+    deletePost(data: DeletePost): Promise<void>;
     restorePost(id: PostId): Promise<void>;
     hardDeletePost(id: PostId): Promise<void>;
 }
@@ -84,6 +84,7 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
                 createdPost.published,
                 createdPost.authorId,
                 createdPost.categoryId,
+                createdPost.deletedBy,
                 createdPost.createdAt,
                 createdPost.updatedAt,
                 createdPost.deletedAt
@@ -151,7 +152,7 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             }
             this.debug.info("Post found", { postId: postData.id });
 
-            this.debug.step("Mapping database record to Category domain object");
+            this.debug.step("Mapping database record to Post domain object");
             const postInstance = new Post(
                 postData.id,
                 postData.slug,
@@ -160,6 +161,7 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
                 postData.published,
                 postData.authorId,
                 postData.categoryId,
+                postData.deletedBy,
                 postData.createdAt,
                 postData.updatedAt,
                 postData.deletedAt
@@ -236,6 +238,7 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
                 postData.published,
                 postData.authorId,
                 postData.categoryId,
+                postData.deletedBy,
                 postData.createdAt,
                 postData.updatedAt,
                 postData.deletedAt
@@ -256,13 +259,11 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
 
     /**
      * ## Get All Posts
-     * Retrieves a list of posts from the database based on the provided query parameters.
-     * Supports filtering by title and slug, as well as pagination through page and limit parameters.
-     * Validates the input query parameters against the GetAllPosts schema before attempting to retrieve data from the database.
-     * If validation fails, a BadRequestError is thrown with details about the validation errors.
-     * If an unexpected error occurs during the database operation, an AppError is thrown with details about the error.
-     * @param query - The query parameters for retrieving posts, which must conform to the GetAllPosts schema.
-     * @returns A promise that resolves to an array of Post objects that match the query criteria.
+     * Retrieves a paginated list of posts from the database based on the provided query parameters.
+     * Supports filtering by title (partial match), categoryId, and authorId.
+     * Validates the input query parameters against the GetAllPosts schema before querying.
+     * @param query - The query parameters conforming to the GetAllPosts schema.
+     * @returns A promise that resolves to an array of Post objects matching the query criteria.
      * @example
      * ```ts
      * const posts = await postRepository.getAllPosts({
@@ -272,10 +273,9 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
      *   categoryId: "category-id-123",
      *   authorId: "user-id-123",
      * });
-     * console.log("Retrieved posts:", posts);
      * ```
-     * @throws {BadRequestError} If the input query parameters fail validation against the GetAllPosts schema, with details about the validation errors.
-     * @throws {AppError} If an unexpected error occurs during the database operation, with details about the error.
+     * @throws {BadRequestError} If the input query parameters fail validation against the GetAllPosts schema.
+     * @throws {AppError} If an unexpected error occurs during the database operation.
      */
     async getAllPosts(query: GetAllPosts): Promise<Post[]> {
         try {
@@ -288,29 +288,29 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             this.debug.step("Retrieving posts from database");
             const postsData = await db.query.post.findMany({
                 where: {
-                    title: validatedQuery.title ? {
-                        like: `%${validatedQuery.title}%`,
-                    } : undefined,
+                    ...(validatedQuery.title ? { title: { like: `%${validatedQuery.title}%` } } : {}),
+                    ...(validatedQuery.categoryId ? { categoryId: { eq: validatedQuery.categoryId } } : {}),
+                    ...(validatedQuery.authorId ? { authorId: { eq: validatedQuery.authorId } } : {}),
                 },
                 offset: (validatedQuery.page - 1) * validatedQuery.limit,
                 limit: validatedQuery.limit,
-            })
+            });
             this.debug.info("Posts retrieved successfully", { count: postsData.length });
 
             this.debug.step("Mapping database records to Post domain objects");
             const posts = postsData.map(postData => new Post(
                 postData.id,
-                postData.title,
                 postData.slug,
+                postData.title,
                 postData.content,
                 postData.published,
                 postData.authorId,
                 postData.categoryId,
+                postData.deletedBy,
                 postData.createdAt,
                 postData.updatedAt,
                 postData.deletedAt
             ));
-            this.debug.info("Post domain objects created successfully", { ...posts });
 
             this.debug.finish("Getting all posts");
             return posts;
@@ -368,12 +368,13 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             this.debug.step("Mapping database record to Post domain object");
             const postInstance = new Post(
                 postData.id,
-                postData.title,
                 postData.slug,
+                postData.title,
                 postData.content,
                 postData.published,
                 postData.authorId,
                 postData.categoryId,
+                postData.deletedBy,
                 postData.createdAt,
                 postData.updatedAt,
                 postData.deletedAt
@@ -408,22 +409,23 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
      * @throws {BadRequestError} If the provided ID fails validation against the PostId schema, with details about the validation errors.
      * @throws {AppError} If an unexpected error occurs during the database operation, with details about the error.
      */
-    async deletePost(id: PostId): Promise<void> {
+    async deletePost(data: DeletePost): Promise<void> {
         try {
             this.debug.start("Deleting post");
 
-            this.debug.step("Validating post ID", { id });
-            const validatedId = postId.parse(id);
-            this.debug.info("Post ID validated successfully", { validatedId });
+            this.debug.step("Validating input data", { ...data });
+            const validatedData = deletePostSchema.parse(data);
+            this.debug.info("Input data validated successfully", { ...validatedData });
 
-            this.debug.step("Updating post in database to set deletedAt timestamp");
+            this.debug.step("Updating post in database to set deletedAt timestamp and deletedBy");
             await db.update(post)
                 .set({
                     deletedAt: new Date(),
+                    deletedBy: validatedData.deletedBy,
                     updatedAt: new Date(),
                 })
-                .where(eq(post.id, validatedId));
-            this.debug.info("Post marked as deleted successfully", { postId: validatedId });
+                .where(eq(post.id, validatedData.id));
+            this.debug.info("Post marked as deleted successfully", { postId: validatedData.id });
 
             this.debug.finish("Post deletion process completed");
             return;
@@ -461,10 +463,11 @@ export class PostRepository extends Debuggable implements PostRepositoryTemplate
             const validatedId = postId.parse(id);
             this.debug.info("Post ID validated successfully", { validatedId });
 
-            this.debug.step("Updating post in database to set deletedAt to null");
+            this.debug.step("Updating post in database to clear deletedAt and deletedBy");
             await db.update(post)
                 .set({
                     deletedAt: null,
+                    deletedBy: null,
                     updatedAt: new Date(),
                 })
                 .where(eq(post.id, validatedId));
